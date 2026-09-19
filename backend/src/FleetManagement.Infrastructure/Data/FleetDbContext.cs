@@ -13,6 +13,7 @@ public class FleetDbContext : DbContext, IFleetDbContext
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<VehicleAssignment> VehicleAssignments => Set<VehicleAssignment>();
+    public DbSet<Trip> Trips => Set<Trip>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

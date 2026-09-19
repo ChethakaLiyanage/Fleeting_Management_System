@@ -7,5 +7,6 @@ public interface IFleetDbContext
 {
     DbSet<Vehicle> Vehicles { get; }
     DbSet<Driver> Drivers { get; }
+    DbSet<VehicleAssignment> VehicleAssignments { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

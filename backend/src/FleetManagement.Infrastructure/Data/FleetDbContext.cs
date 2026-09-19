@@ -16,6 +16,7 @@ public class FleetDbContext : DbContext, IFleetDbContext
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<InspectionItem> InspectionItems => Set<InspectionItem>();
+    public DbSet<Incident> Incidents => Set<Incident>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

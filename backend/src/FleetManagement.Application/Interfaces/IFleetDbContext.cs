@@ -11,5 +11,6 @@ public interface IFleetDbContext
     DbSet<Trip> Trips { get; }
     DbSet<Inspection> Inspections { get; }
     DbSet<InspectionItem> InspectionItems { get; }
+    DbSet<Incident> Incidents { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

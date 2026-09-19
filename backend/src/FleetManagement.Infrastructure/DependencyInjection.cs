@@ -1,4 +1,5 @@
-﻿using FleetManagement.Infrastructure.Data;
+﻿using FleetManagement.Application.Interfaces;
+using FleetManagement.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,8 @@ public static class DependencyInjection
 
         services.AddDbContext<FleetDbContext>(options =>
             options.UseNpgsql(connectionString));
+
+        services.AddScoped<IFleetDbContext>(provider => provider.GetRequiredService<FleetDbContext>());
 
         return services;
     }

@@ -1,11 +1,13 @@
-﻿using FleetManagement.Infrastructure;
+﻿using FleetManagement.Application;
+using FleetManagement.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Add Infrastructure services (PostgreSQL / EF Core)
+// Add Application & Infrastructure services
+builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

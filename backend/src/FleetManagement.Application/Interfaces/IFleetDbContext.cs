@@ -9,5 +9,7 @@ public interface IFleetDbContext
     DbSet<Driver> Drivers { get; }
     DbSet<VehicleAssignment> VehicleAssignments { get; }
     DbSet<Trip> Trips { get; }
+    DbSet<Inspection> Inspections { get; }
+    DbSet<InspectionItem> InspectionItems { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

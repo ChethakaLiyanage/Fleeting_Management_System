@@ -14,6 +14,8 @@ public class FleetDbContext : DbContext, IFleetDbContext
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<VehicleAssignment> VehicleAssignments => Set<VehicleAssignment>();
     public DbSet<Trip> Trips => Set<Trip>();
+    public DbSet<Inspection> Inspections => Set<Inspection>();
+    public DbSet<InspectionItem> InspectionItems => Set<InspectionItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

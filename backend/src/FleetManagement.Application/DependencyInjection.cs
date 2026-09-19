@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<IDriverService, DriverService>();
         services.AddScoped<IAssignmentService, AssignmentService>();
         services.AddScoped<ITripService, TripService>();
+        services.AddScoped<IInspectionService, InspectionService>();
         return services;
     }
 }

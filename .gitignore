@@ -1,0 +1,31 @@
+﻿## .NET / C#
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+*.DotSettings.user
+
+## Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm
+
+## Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv
+env/
+venv/
+ENV/
+
+## Logs & Environment
+*.log
+.DS_Store
+Thumbs.db

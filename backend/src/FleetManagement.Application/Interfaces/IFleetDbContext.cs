@@ -16,5 +16,7 @@ public interface IFleetDbContext
     DbSet<Role> Roles { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<FuelRecord> FuelRecords { get; }
+    DbSet<MaintenanceRecord> MaintenanceRecords { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,4 @@
-﻿using FleetManagement.Application.Interfaces;
+using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +17,10 @@ public class FleetDbContext : DbContext, IFleetDbContext
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<InspectionItem> InspectionItems => Set<InspectionItem>();
     public DbSet<Incident> Incidents => Set<Incident>();
-
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

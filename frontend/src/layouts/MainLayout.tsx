@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Car, Users, LogOut, Map,
-  Wrench, FileCheck, AlertTriangle, Droplet, Bell, Search
+  Wrench, FileCheck, AlertTriangle, Droplet, Bell
 } from 'lucide-react';
 import { authService } from '../services/authService';
 import './MainLayout.css';
@@ -96,12 +96,6 @@ const MainLayout = () => {
             </div>
           </div>
 
-          <div className="header-search">
-            <div className="search-input-wrapper">
-              <Search size={15} className="search-icon" />
-              <input type="text" placeholder="Search anything..." className="search-input" />
-            </div>
-          </div>
 
           <div className="header-actions">
             <button className="icon-btn notif-btn">

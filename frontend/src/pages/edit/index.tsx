@@ -40,15 +40,23 @@ const enumValue = (value: any, labels: string[][]) => {
   return match?.[0] ?? '';
 };
 
-function Field({ label, name, value, onChange, type = 'text', required = false, visible = true, options: selectOptions }: { label: string; name: string; value: any; onChange: (name: string, value: string) => void; type?: string; required?: boolean; visible?: boolean; options?: string[][] }) {
+function Field({ label, name, value, onChange, type = 'text', required = false, visible = true, options: selectOptions, fullWidth = false }: { label: string; name: string; value: any; onChange: (name: string, value: string) => void; type?: string; required?: boolean; visible?: boolean; options?: string[][]; fullWidth?: boolean }) {
   if (!visible) return null;
-  return <label className="edit-field">
-    <span>{label}</span>
-    {selectOptions ? <select name={name} value={value ?? ''} onChange={event => onChange(name, event.target.value)} required={required}>
-      <option value="">Select {label.toLowerCase()}</option>
-      {selectOptions.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
-    </select> : <input name={name} type={type} value={value ?? ''} onChange={event => onChange(name, event.target.value)} required={required} />}
-  </label>;
+  return (
+    <div className={`form-group ${fullWidth ? 'full-width' : ''}`}>
+      <label>{label}</label>
+      {selectOptions ? (
+        <select className="form-control" name={name} value={value ?? ''} onChange={event => onChange(name, event.target.value)} required={required}>
+          <option value="">Select {label.toLowerCase()}</option>
+          {selectOptions.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+        </select>
+      ) : type === 'textarea' ? (
+        <textarea className="form-control" name={name} value={value ?? ''} onChange={event => onChange(name, event.target.value)} required={required} />
+      ) : (
+        <input className="form-control" name={name} type={type} value={value ?? ''} onChange={event => onChange(name, event.target.value)} required={required} />
+      )}
+    </div>
+  );
 }
 
 const EditRecord = () => {
@@ -64,7 +72,18 @@ const EditRecord = () => {
   const [error, setError] = useState('');
 
   const update = (name: string, value: string) => setForm(previous => ({ ...previous, [name]: value }));
-  const title = module ? `${module.charAt(0).toUpperCase()}${module.slice(1)} ${id ? 'edit' : 'new'}` : 'Record';
+  let title = 'Record';
+  if (module) {
+    const isEdit = !!id;
+    if (module === 'fuel') title = isEdit ? 'Edit Fuel Record' : 'Add Fuel Record';
+    else if (module === 'drivers') title = isEdit ? 'Edit Driver' : 'Add New Driver';
+    else if (module === 'vehicles') title = isEdit ? 'Edit Vehicle' : 'Add Vehicle';
+    else if (module === 'trips') title = isEdit ? 'Edit Trip' : 'Log New Trip';
+    else if (module === 'incidents') title = isEdit ? 'Edit Incident' : 'Report Incident';
+    else if (module === 'maintenance') title = isEdit ? 'Edit Maintenance' : 'Schedule Maintenance';
+    else if (module === 'inspections') title = isEdit ? 'Edit Inspection' : 'New Inspection';
+    else title = `${isEdit ? 'Edit' : 'Add'} ${(module as string).charAt(0).toUpperCase() + (module as string).slice(1)}`;
+  }
 
   useEffect(() => {
     if (!module) return;
@@ -115,15 +134,30 @@ const EditRecord = () => {
     }
   };
 
-  if (!module) return <div className="edit-page"><p className="error-state">Invalid record URL.</p></div>;
-  return <div className="edit-page fade-in">
-    <div className="edit-header"><div><Link className="back-link" to={`/${module}`}><ArrowLeft size={16} /> Back to {module}</Link><h1>{title}</h1></div></div>
-    {loading ? <div className="loading-state">Loading record...</div> : error && !Object.keys(form).length ? <div className="error-state"><p>{error}</p><Link className="btn btn-primary" to={`/${module}`}>Back to list</Link></div> : <form className="edit-form glass-panel" onSubmit={submit}>
-      {error && <div className="form-error">{error}</div>}
-      {message && <div className="form-success">{message}</div>}
-      <div className="edit-grid">{renderFields(module, form, update, vehicles, drivers, trips, !id)}</div>
-      <div className="edit-actions"><Link className="btn" to={`/${module}`}>Cancel</Link><button className="btn btn-primary" type="submit" disabled={saving}><Save size={16} /> {saving ? 'Saving...' : id ? 'Save changes' : 'Create record'}</button></div>
-    </form>}
+  return <div className="edit-container fade-in">
+    <div className="page-header" style={{ marginBottom: '1.5rem', padding: '0 1rem' }}>
+      <div className="page-header-left">
+        <Link className="back-link" to={`/${module}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textDecoration: 'none' }}>
+          <ArrowLeft size={14} /> Back to {module}
+        </Link>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>{title}</h1>
+      </div>
+    </div>
+    
+    {loading ? <div className="loading-state" style={{ padding: '3rem', textAlign: 'center' }}>Loading record...</div> : error && !Object.keys(form).length ? <div className="state-container"><p>{error}</p><Link className="btn btn-primary" to={`/${module}`}>Back to list</Link></div> : 
+    <div className="form-card">
+      <form onSubmit={submit}>
+        {error && <div className="form-error">{error}</div>}
+        {message && <div className="form-success">{message}</div>}
+        <div className="form-grid">{module && renderFields(module, form, update, vehicles, drivers, trips, !id)}</div>
+        <div className="form-actions">
+          <Link className="btn btn-secondary" to={`/${module}`}>Cancel</Link>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
+            <Save size={16} /> {saving ? 'Saving...' : id ? 'Save changes' : 'Create record'}
+          </button>
+        </div>
+      </form>
+    </div>}
   </div>;
 };
 
@@ -131,22 +165,127 @@ function renderFields(module: Module, form: FormState, update: (name: string, va
   const vehicleOptions = vehicles.map(vehicle => [vehicle.id, `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}`]);
   const driverOptions = drivers.map(driver => [driver.id, `${driver.employeeNumber} - ${driver.fullName}`]);
   const tripOptions = trips.map(trip => [trip.id, `${trip.tripNumber} - ${trip.startLocation} to ${trip.destination}`]);
-  const commonRelations = <>
-    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
-    {(module === 'trips' || module === 'inspections' || module === 'incidents' || module === 'fuel') && <Field label="Driver" name="driverId" value={form.driverId} onChange={update} options={driverOptions} required={module === 'trips'} />}
-    {(module === 'inspections' || module === 'incidents') && <Field label="Trip" name="tripId" value={form.tripId} onChange={update} options={tripOptions} />}
-  </>;
   if (module === 'vehicles') return <>
-    <Field label="Registration number" name="registrationNumber" value={form.registrationNumber} onChange={update} required /><Field label="VIN" name="vin" value={form.vin} onChange={update} /><Field label="Engine number" name="engineNumber" value={form.engineNumber} onChange={update} required /><Field label="Make" name="make" value={form.make} onChange={update} required /><Field label="Model" name="model" value={form.model} onChange={update} required /><Field label="Year" name="year" value={form.year} onChange={update} type="number" required /><Field label="Vehicle type" name="vehicleType" value={form.vehicleType} onChange={update} options={options.vehicleType} required /><Field label="Fuel type" name="fuelType" value={form.fuelType} onChange={update} options={options.fuelType} required /><Field label="Transmission" name="transmission" value={form.transmission} onChange={update} options={[['1', 'Automatic'], ['2', 'Manual']]} required /><Field label="Color" name="color" value={form.color} onChange={update} required /><Field label="Mileage" name="mileage" value={form.mileage} onChange={update} type="number" required /><Field label="Status" name="status" value={form.status} onChange={update} options={options.vehicleStatus} required visible={!isCreate} /><Field label="Purchase date" name="purchaseDate" value={form.purchaseDate} onChange={update} type="date" /><Field label="Purchase price" name="purchasePrice" value={form.purchasePrice} onChange={update} type="number" /><Field label="Registration expiry" name="registrationExpiry" value={form.registrationExpiry} onChange={update} type="date" />
+    <div className="form-section-title">Vehicle Details</div>
+    <Field label="Registration Number" name="registrationNumber" value={form.registrationNumber} onChange={update} required />
+    <Field label="VIN" name="vin" value={form.vin} onChange={update} />
+    <Field label="Engine Number" name="engineNumber" value={form.engineNumber} onChange={update} required />
+    <Field label="Make" name="make" value={form.make} onChange={update} required />
+    <Field label="Model" name="model" value={form.model} onChange={update} required />
+    <Field label="Year" name="year" value={form.year} onChange={update} type="number" required />
+    <Field label="Vehicle Type" name="vehicleType" value={form.vehicleType} onChange={update} options={options.vehicleType} required />
+    <Field label="Fuel Type" name="fuelType" value={form.fuelType} onChange={update} options={options.fuelType} required />
+    <Field label="Transmission" name="transmission" value={form.transmission} onChange={update} options={[['1', 'Automatic'], ['2', 'Manual']]} required />
+    <Field label="Color" name="color" value={form.color} onChange={update} required />
+    <Field label="Mileage" name="mileage" value={form.mileage} onChange={update} type="number" required />
+    <Field label="Status" name="status" value={form.status} onChange={update} options={options.vehicleStatus} required visible={!isCreate} />
+    <div className="form-section-title">Purchase Details</div>
+    <Field label="Purchase Date" name="purchaseDate" value={form.purchaseDate} onChange={update} type="date" />
+    <Field label="Purchase Price" name="purchasePrice" value={form.purchasePrice} onChange={update} type="number" />
+    <Field label="Registration Expiry" name="registrationExpiry" value={form.registrationExpiry} onChange={update} type="date" />
   </>;
   if (module === 'drivers') return <>
-    <Field label="Employee number" name="employeeNumber" value={form.employeeNumber} onChange={update} required /><Field label="First name" name="firstName" value={form.firstName} onChange={update} required /><Field label="Last name" name="lastName" value={form.lastName} onChange={update} required /><Field label="Phone" name="phone" value={form.phone} onChange={update} required /><Field label="Email" name="email" value={form.email} onChange={update} type="email" required /><Field label="Initial password" name="initialPassword" value={form.initialPassword} onChange={update} type="password" required={isCreate} visible={isCreate} /><Field label="Address" name="address" value={form.address} onChange={update} required /><Field label="License number" name="licenseNumber" value={form.licenseNumber} onChange={update} required /><Field label="License class" name="licenseClass" value={form.licenseClass} onChange={update} required /><Field label="License issue date" name="licenseIssueDate" value={form.licenseIssueDate} onChange={update} type="date" required /><Field label="License expiry" name="licenseExpiry" value={form.licenseExpiry} onChange={update} type="date" required /><Field label="Status" name="status" value={form.status} onChange={update} options={options.driverStatus} required visible={!isCreate} /><Field label="Join date" name="joinDate" value={form.joinDate} onChange={update} type="date" visible={isCreate} /><Field label="Emergency contact" name="emergencyContact" value={form.emergencyContact} onChange={update} required />
+    <div className="form-section-title">Personal Information</div>
+    <Field label="Employee Number" name="employeeNumber" value={form.employeeNumber} onChange={update} required />
+    <Field label="First Name" name="firstName" value={form.firstName} onChange={update} required />
+    <Field label="Last Name" name="lastName" value={form.lastName} onChange={update} required />
+    <Field label="Phone" name="phone" value={form.phone} onChange={update} required />
+    <Field label="Email" name="email" value={form.email} onChange={update} type="email" required />
+    <Field label="Initial Password" name="initialPassword" value={form.initialPassword} onChange={update} type="password" required={isCreate} visible={isCreate} />
+    <div className="form-section-title">Address</div>
+    <Field label="Address" name="address" value={form.address} onChange={update} required fullWidth />
+    <div className="form-section-title">Licence Information</div>
+    <Field label="License Number" name="licenseNumber" value={form.licenseNumber} onChange={update} required />
+    <Field label="License Class" name="licenseClass" value={form.licenseClass} onChange={update} required />
+    <Field label="License Issue Date" name="licenseIssueDate" value={form.licenseIssueDate} onChange={update} type="date" required />
+    <Field label="License Expiry" name="licenseExpiry" value={form.licenseExpiry} onChange={update} type="date" required />
+    <div className="form-section-title">Employment</div>
+    <Field label="Join Date" name="joinDate" value={form.joinDate} onChange={update} type="date" visible={isCreate} />
+    <Field label="Emergency Contact" name="emergencyContact" value={form.emergencyContact} onChange={update} required />
+    <Field label="Status" name="status" value={form.status} onChange={update} options={options.driverStatus} required visible={!isCreate} />
   </>;
-  if (module === 'trips') return <>{commonRelations}<Field label="Trip number" name="tripNumber" value={form.tripNumber} onChange={update} required visible={!isCreate} /><Field label="Start location" name="startLocation" value={form.startLocation} onChange={update} required /><Field label="Destination" name="destination" value={form.destination} onChange={update} required /><Field label="Start time" name="startTime" value={form.startTime} onChange={update} type="datetime-local" /><Field label="End time" name="endTime" value={form.endTime} onChange={update} type="datetime-local" /><Field label="Starting mileage" name="startingMileage" value={form.startingMileage} onChange={update} type="number" /><Field label="Ending mileage" name="endingMileage" value={form.endingMileage} onChange={update} type="number" /><Field label="Distance" name="distance" value={form.distance} onChange={update} type="number" /><Field label="Purpose" name="purpose" value={form.purpose} onChange={update} required /><Field label="Status" name="status" value={form.status} onChange={update} options={options.tripStatus} required visible={!isCreate} /><Field label="Notes" name="notes" value={form.notes} onChange={update} /> </>;
-  if (module === 'fuel') return <>{commonRelations}<Field label="Fuel date" name="fuelDate" value={form.fuelDate} onChange={update} type="datetime-local" required /><Field label="Litres" name="litres" value={form.litres} onChange={update} type="number" required /><Field label="Cost per litre" name="costPerLitre" value={form.costPerLitre} onChange={update} type="number" required /><Field label="Odometer reading" name="odometerReading" value={form.odometerReading} onChange={update} type="number" required /><Field label="Fuel type" name="fuelType" value={form.fuelType} onChange={update} options={options.fuelType} required /><Field label="Station" name="station" value={form.station} onChange={update} /><Field label="Notes" name="notes" value={form.notes} onChange={update} /> </>;
-  if (module === 'maintenance') return <>{commonRelations}<Field label="Type" name="type" value={form.type} onChange={update} options={options.maintenanceType} required /><Field label="Description" name="description" value={form.description} onChange={update} required /><Field label="Service provider" name="serviceProvider" value={form.serviceProvider} onChange={update} /><Field label="Scheduled date" name="scheduledDate" value={form.scheduledDate} onChange={update} type="datetime-local" required /><Field label="Completed date" name="completedDate" value={form.completedDate} onChange={update} type="datetime-local" /><Field label="Odometer reading" name="odometerReading" value={form.odometerReading} onChange={update} type="number" /><Field label="Cost" name="cost" value={form.cost} onChange={update} type="number" /><Field label="Next service odometer" name="nextServiceOdometer" value={form.nextServiceOdometer} onChange={update} type="number" /><Field label="Next service date" name="nextServiceDate" value={form.nextServiceDate} onChange={update} type="datetime-local" /><Field label="Status" name="status" value={form.status} onChange={update} options={options.maintenanceStatus} required visible={!isCreate} /><Field label="Notes" name="notes" value={form.notes} onChange={update} /> </>;
-  if (module === 'inspections') return <>{commonRelations}<Field label="Type" name="type" value={form.type} onChange={update} options={options.inspectionType} required /><Field label="Inspection date" name="inspectionDate" value={form.inspectionDate} onChange={update} type="datetime-local" required /><Field label="Result" name="result" value={form.result} onChange={update} options={options.inspectionResult} required visible={!isCreate} /><Field label="Notes" name="notes" value={form.notes} onChange={update} /> <div className="items-field"><strong>Inspection items</strong>{(form.items ?? []).map((item: any, index: number) => <div className="item-row" key={item.id ?? index}><input value={item.itemName} placeholder="Item name" onChange={event => { const items = [...form.items]; items[index] = { ...items[index], itemName: event.target.value }; update('items', items as any); }} /><select value={item.status} onChange={event => { const items = [...form.items]; items[index] = { ...items[index], status: Number(event.target.value) }; update('items', items as any); }}>{options.itemStatus.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><input value={item.notes ?? ''} placeholder="Notes" onChange={event => { const items = [...form.items]; items[index] = { ...items[index], notes: event.target.value }; update('items', items as any); }} /></div>)}<button type="button" className="btn" onClick={() => update('items', [...(form.items ?? []), { itemName: '', status: 1, notes: '' }] as any)}>Add item</button></div></>;
-  return <>{commonRelations}<Field label="Date" name="date" value={form.date} onChange={update} type="datetime-local" required /><Field label="Location" name="location" value={form.location} onChange={update} required /><Field label="Type" name="type" value={form.type} onChange={update} options={options.incidentType} required /><Field label="Description" name="description" value={form.description} onChange={update} required /><Field label="Severity" name="severity" value={form.severity} onChange={update} options={options.severity} required /><Field label="Police report number" name="policeReportNumber" value={form.policeReportNumber} onChange={update} /><Field label="Insurance claim number" name="insuranceClaimNumber" value={form.insuranceClaimNumber} onChange={update} /><Field label="Estimated damage" name="estimatedDamage" value={form.estimatedDamage} onChange={update} type="number" /><Field label="Actual repair cost" name="actualRepairCost" value={form.actualRepairCost} onChange={update} type="number" /><Field label="Status" name="status" value={form.status} onChange={update} options={options.incidentStatus} required visible={!isCreate} /></>;
+  if (module === 'trips') return <>
+    <div className="form-section-title">Trip Details</div>
+    <Field label="Trip Number" name="tripNumber" value={form.tripNumber} onChange={update} required visible={!isCreate} />
+    <Field label="Status" name="status" value={form.status} onChange={update} options={options.tripStatus} required visible={!isCreate} />
+    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
+    <Field label="Driver" name="driverId" value={form.driverId} onChange={update} options={driverOptions} required />
+    <Field label="Start Location" name="startLocation" value={form.startLocation} onChange={update} required />
+    <Field label="Destination" name="destination" value={form.destination} onChange={update} required />
+    <Field label="Start Time" name="startTime" value={form.startTime} onChange={update} type="datetime-local" />
+    <Field label="End Time" name="endTime" value={form.endTime} onChange={update} type="datetime-local" />
+    <Field label="Starting Mileage" name="startingMileage" value={form.startingMileage} onChange={update} type="number" />
+    <Field label="Ending Mileage" name="endingMileage" value={form.endingMileage} onChange={update} type="number" />
+    <Field label="Distance" name="distance" value={form.distance} onChange={update} type="number" />
+    <Field label="Purpose" name="purpose" value={form.purpose} onChange={update} required fullWidth />
+    <Field label="Notes" name="notes" value={form.notes} onChange={update} type="textarea" fullWidth />
+  </>;
+  if (module === 'fuel') return <>
+    <div className="form-section-title">Fuel Record Details</div>
+    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
+    <Field label="Driver" name="driverId" value={form.driverId} onChange={update} options={driverOptions} />
+    <Field label="Fuel Date" name="fuelDate" value={form.fuelDate} onChange={update} type="datetime-local" required />
+    <Field label="Fuel Type" name="fuelType" value={form.fuelType} onChange={update} options={options.fuelType} required />
+    <Field label="Litres" name="litres" value={form.litres} onChange={update} type="number" required />
+    <Field label="Cost Per Litre" name="costPerLitre" value={form.costPerLitre} onChange={update} type="number" required />
+    <Field label="Odometer Reading" name="odometerReading" value={form.odometerReading} onChange={update} type="number" required />
+    <Field label="Station" name="station" value={form.station} onChange={update} />
+    <Field label="Notes" name="notes" value={form.notes} onChange={update} type="textarea" fullWidth />
+  </>;
+  if (module === 'maintenance') return <>
+    <div className="form-section-title">Maintenance Record Details</div>
+    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
+    <Field label="Type" name="type" value={form.type} onChange={update} options={options.maintenanceType} required />
+    <Field label="Status" name="status" value={form.status} onChange={update} options={options.maintenanceStatus} required visible={!isCreate} />
+    <Field label="Service Provider" name="serviceProvider" value={form.serviceProvider} onChange={update} />
+    <Field label="Scheduled Date" name="scheduledDate" value={form.scheduledDate} onChange={update} type="datetime-local" required />
+    <Field label="Completed Date" name="completedDate" value={form.completedDate} onChange={update} type="datetime-local" />
+    <Field label="Odometer Reading" name="odometerReading" value={form.odometerReading} onChange={update} type="number" />
+    <Field label="Cost" name="cost" value={form.cost} onChange={update} type="number" />
+    <Field label="Next Service Odometer" name="nextServiceOdometer" value={form.nextServiceOdometer} onChange={update} type="number" />
+    <Field label="Next Service Date" name="nextServiceDate" value={form.nextServiceDate} onChange={update} type="datetime-local" />
+    <Field label="Description" name="description" value={form.description} onChange={update} type="textarea" required fullWidth />
+    <Field label="Notes" name="notes" value={form.notes} onChange={update} type="textarea" fullWidth />
+  </>;
+  if (module === 'inspections') return <>
+    <div className="form-section-title">Inspection Details</div>
+    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
+    <Field label="Driver" name="driverId" value={form.driverId} onChange={update} options={driverOptions} />
+    <Field label="Trip" name="tripId" value={form.tripId} onChange={update} options={tripOptions} />
+    <Field label="Type" name="type" value={form.type} onChange={update} options={options.inspectionType} required />
+    <Field label="Inspection Date" name="inspectionDate" value={form.inspectionDate} onChange={update} type="datetime-local" required />
+    <Field label="Result" name="result" value={form.result} onChange={update} options={options.inspectionResult} required visible={!isCreate} />
+    <Field label="Notes" name="notes" value={form.notes} onChange={update} type="textarea" fullWidth />
+    <div className="form-section-title" style={{ marginTop: '16px' }}>Inspection Items</div>
+    <div className="form-group full-width">
+      {(form.items ?? []).map((item: any, index: number) => (
+        <div key={item.id ?? index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: '12px', marginBottom: '12px' }}>
+          <input className="form-control" value={item.itemName} placeholder="Item name" onChange={e => { const items = [...form.items]; items[index] = { ...items[index], itemName: e.target.value }; update('items', items as any); }} />
+          <select className="form-control" value={item.status} onChange={e => { const items = [...form.items]; items[index] = { ...items[index], status: Number(e.target.value) }; update('items', items as any); }}>
+            {options.itemStatus.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <input className="form-control" value={item.notes ?? ''} placeholder="Notes" onChange={e => { const items = [...form.items]; items[index] = { ...items[index], notes: e.target.value }; update('items', items as any); }} />
+        </div>
+      ))}
+      <button type="button" className="btn btn-secondary" style={{ width: 'fit-content' }} onClick={() => update('items', [...(form.items ?? []), { itemName: '', status: 1, notes: '' }] as any)}>Add item</button>
+    </div>
+  </>;
+  return <>
+    <div className="form-section-title">Incident Details</div>
+    <Field label="Vehicle" name="vehicleId" value={form.vehicleId} onChange={update} options={vehicleOptions} required />
+    <Field label="Driver" name="driverId" value={form.driverId} onChange={update} options={driverOptions} />
+    <Field label="Trip" name="tripId" value={form.tripId} onChange={update} options={tripOptions} />
+    <Field label="Date" name="date" value={form.date} onChange={update} type="datetime-local" required />
+    <Field label="Location" name="location" value={form.location} onChange={update} required />
+    <Field label="Type" name="type" value={form.type} onChange={update} options={options.incidentType} required />
+    <Field label="Severity" name="severity" value={form.severity} onChange={update} options={options.severity} required />
+    <Field label="Status" name="status" value={form.status} onChange={update} options={options.incidentStatus} required visible={!isCreate} />
+    <Field label="Police Report Number" name="policeReportNumber" value={form.policeReportNumber} onChange={update} />
+    <Field label="Insurance Claim Number" name="insuranceClaimNumber" value={form.insuranceClaimNumber} onChange={update} />
+    <Field label="Estimated Damage" name="estimatedDamage" value={form.estimatedDamage} onChange={update} type="number" />
+    <Field label="Actual Repair Cost" name="actualRepairCost" value={form.actualRepairCost} onChange={update} type="number" />
+    <Field label="Description" name="description" value={form.description} onChange={update} type="textarea" required fullWidth />
+  </>;
 }
 
 function defaultForm(module: Module): FormState {

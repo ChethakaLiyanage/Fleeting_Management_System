@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { tripService } from '../../services/tripService';
 import { TripDto, PagedResult } from '../../types';
-import { Plus, Search, Filter, Trash2 } from 'lucide-react';
-import '../vehicles/Vehicles.css'; // Reusing base table styles
+import { Plus, Pencil, Trash2, Map } from 'lucide-react';
+import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Trips = () => {
   const [data, setData] = useState<PagedResult<TripDto> | null>(null);
@@ -11,98 +11,102 @@ const Trips = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchTrips();
-  }, []);
+  useEffect(() => { fetchTrips(); }, []);
 
   const fetchTrips = async () => {
     try {
       setLoading(true);
       const res = await tripService.getTrips();
-      if (res.success && res.data) {
-        setData(res.data);
-      } else {
-        setError(res.message || 'Failed to load trips');
-      }
-    } catch (err) {
-      setError('Network error: Could not reach the server');
-    } finally {
-      setLoading(false);
-    }
+      if (res.success && res.data) setData(res.data);
+      else setError(res.message || 'Failed to load trips');
+    } catch { setError('Network error: Could not reach the server'); }
+    finally { setLoading(false); }
   };
 
   const deleteTrip = async (trip: TripDto) => {
-    if (!window.confirm(`Delete trip ${trip.tripNumber}? Completed and cancelled trips cannot be deleted.`)) return;
-    try { await tripService.deleteTrip(trip.id); await fetchTrips(); } catch (err: any) { setError(err.response?.data?.message || 'Could not delete trip.'); }
+    if (!window.confirm(`Delete trip ${trip.tripNumber}?`)) return;
+    try { await tripService.deleteTrip(trip.id); await fetchTrips(); }
+    catch (err: any) { setError(err.response?.data?.message || 'Could not delete trip.'); }
   };
 
   return (
-    <div className="vehicles-container fade-in">
+    <div>
       <div className="page-header">
-        <h1>Trips Management</h1>
-        <button className="btn btn-primary" onClick={() => navigate('/trips/new')}>
-          <Plus size={18} /> Log Trip
-        </button>
-      </div>
-
-      <div className="table-controls glass-panel">
-        <div className="search-box">
-          <Search size={18} className="search-icon" />
-          <input type="text" placeholder="Search trips..." />
+        <div className="page-header-left">
+          <h1>Trips</h1>
+          <p>Track and manage all fleet trip records</p>
         </div>
-        <button className="btn filter-btn">
-          <Filter size={18} /> Filters
+        <button className="btn btn-primary" onClick={() => navigate('/trips/new')}>
+          <Plus size={16} /> Log Trip
         </button>
       </div>
 
-      <div className="data-table-wrapper glass-panel">
+      <div className="table-card">
+        <div className="table-card-header">
+          <div>
+            <div className="table-card-title">All Trips</div>
+            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="loading-state">Loading trips...</div>
+          <div className="state-container"><span className="spinner" style={{ border: '2px solid #e5e7eb', borderTop: '2px solid var(--primary)' }} /><p>Loading trips...</p></div>
         ) : error ? (
-          <div className="error-state">
+          <div className="state-container" style={{ color: 'var(--danger)' }}>
             <p>{error}</p>
-            <button className="btn btn-primary" onClick={fetchTrips}>Retry</button>
+            <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={fetchTrips}>Retry</button>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Trip #</th>
-                <th>Vehicle</th>
-                <th>Driver</th>
-                <th>Route</th>
-                <th>Start Time</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.items && data.items.length > 0 ? (
-                data.items.map(trip => (
-                  <tr key={trip.id}>
-                    <td><strong>{trip.tripNumber}</strong></td>
-                    <td>{trip.vehicleRegistrationNumber}</td>
-                    <td>{trip.driverName}</td>
-                    <td>{trip.startLocation} &rarr; {trip.destination}</td>
-                    <td>{trip.startTime ? new Date(trip.startTime).toLocaleString() : 'Not started'}</td>
-                    <td>
-                      <span className={`status-badge status-${trip.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {trip.status}
-                      </span>
-                    </td>
-                    <td>
-                      <Link className="action-btn" to={`/trips/${trip.id}/edit`}>Edit</Link>{' '}
-                      <button className="action-btn" onClick={() => deleteTrip(trip)} title="Delete trip"><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="empty-state">No trips found.</td>
+                  <th>Trip #</th>
+                  <th>Vehicle</th>
+                  <th>Driver</th>
+                  <th>Route</th>
+                  <th>Scheduled</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data?.items && data.items.length > 0 ? (
+                  data.items.map(trip => (
+                    <tr key={trip.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: 28, height: 28, background: 'var(--accent-light)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Map size={13} color="#b45309" />
+                          </div>
+                          <strong style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{trip.tripNumber}</strong>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.8125rem' }}>{trip.vehicleRegistrationNumber}</td>
+                      <td style={{ fontSize: '0.8125rem' }}>{trip.driverName}</td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {trip.startLocation} → {trip.destination}
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                        {trip.startTime ? new Date(trip.startTime).toLocaleDateString() : '—'}
+                      </td>
+                      <td><span className={getStatusBadge(trip.status)}>{trip.status}</span></td>
+                      <td>
+                        <div className="action-btns">
+                          <button className="btn-icon" title="Edit" onClick={() => navigate(`/trips/${trip.id}/edit`)}><Pencil size={13} /></button>
+                          <button className="btn-icon danger" title="Delete" onClick={() => deleteTrip(trip)}><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={7}>
+                    <div className="state-container"><Map size={32} style={{ opacity: 0.3 }} /><p>No trips found. Log your first trip.</p></div>
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

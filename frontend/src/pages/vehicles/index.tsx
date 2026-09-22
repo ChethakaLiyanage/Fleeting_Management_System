@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { vehicleService } from '../../services/vehicleService';
 import { VehicleDto, PagedResult } from '../../types';
-import { Plus, Search, Filter, Trash2 } from 'lucide-react';
-import './Vehicles.css';
+import { Plus, Pencil, Trash2, Car } from 'lucide-react';
+import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Vehicles = () => {
   const [data, setData] = useState<PagedResult<VehicleDto> | null>(null);
@@ -11,96 +11,98 @@ const Vehicles = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchVehicles();
-  }, []);
+  useEffect(() => { fetchVehicles(); }, []);
 
   const fetchVehicles = async () => {
     try {
       setLoading(true);
       const res = await vehicleService.getVehicles();
-      if (res.success && res.data) {
-        setData(res.data);
-      } else {
-        setError(res.message || 'Failed to load vehicles');
-      }
-    } catch (err) {
-      setError('Network error: Could not reach the server');
-    } finally {
-      setLoading(false);
-    }
+      if (res.success && res.data) setData(res.data);
+      else setError(res.message || 'Failed to load vehicles');
+    } catch { setError('Network error: Could not reach the server'); }
+    finally { setLoading(false); }
   };
 
   const deleteVehicle = async (vehicle: VehicleDto) => {
     if (!window.confirm(`Archive vehicle ${vehicle.registrationNumber}?`)) return;
-    try { await vehicleService.deleteVehicle(vehicle.id); await fetchVehicles(); } catch (err: any) { setError(err.response?.data?.message || 'Could not archive vehicle.'); }
+    try { await vehicleService.deleteVehicle(vehicle.id); await fetchVehicles(); }
+    catch (err: any) { setError(err.response?.data?.message || 'Could not archive vehicle.'); }
   };
 
   return (
-    <div className="vehicles-container fade-in">
+    <div>
+      {/* Page Header */}
       <div className="page-header">
-        <h1>Vehicles Management</h1>
-        <button className="btn btn-primary" onClick={() => navigate('/vehicles/new')}>
-          <Plus size={18} /> Add Vehicle
-        </button>
-      </div>
-
-      <div className="table-controls glass-panel">
-        <div className="search-box">
-          <Search size={18} className="search-icon" />
-          <input type="text" placeholder="Search by registration or model..." />
+        <div className="page-header-left">
+          <h1>Vehicles</h1>
+          <p>Manage your fleet of {data?.totalCount ?? 0} vehicles</p>
         </div>
-        <button className="btn filter-btn">
-          <Filter size={18} /> Filters
+        <button className="btn btn-primary" onClick={() => navigate('/vehicles/new')}>
+          <Plus size={16} /> Add Vehicle
         </button>
       </div>
 
-      <div className="data-table-wrapper glass-panel">
+      {/* Table Card */}
+      <div className="table-card">
+        <div className="table-card-header">
+          <div>
+            <div className="table-card-title">All Vehicles</div>
+            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="loading-state">Loading vehicles...</div>
+          <div className="state-container"><span className="spinner" style={{ border: '2px solid #e5e7eb', borderTop: '2px solid var(--primary)' }} /><p>Loading vehicles...</p></div>
         ) : error ? (
-          <div className="error-state">
+          <div className="state-container" style={{ color: 'var(--danger)' }}>
             <p>{error}</p>
-            <button className="btn btn-primary" onClick={fetchVehicles}>Retry</button>
+            <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={fetchVehicles}>Retry</button>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Registration</th>
-                <th>Make & Model</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Mileage</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.items && data.items.length > 0 ? (
-                data.items.map(vehicle => (
-                  <tr key={vehicle.id}>
-                    <td><strong>{vehicle.registrationNumber}</strong></td>
-                    <td>{vehicle.make} {vehicle.model} ({vehicle.year})</td>
-                    <td>{vehicle.vehicleType}</td>
-                    <td>
-                      <span className={`status-badge status-${vehicle.status}`}>
-                        {vehicle.status}
-                      </span>
-                    </td>
-                    <td>{vehicle.mileage.toLocaleString()} km</td>
-                    <td>
-                      <Link className="action-btn" to={`/vehicles/${vehicle.id}/edit`}>Edit</Link>{' '}
-                      <button className="action-btn" onClick={() => deleteVehicle(vehicle)} title="Archive vehicle"><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="empty-state">No vehicles found.</td>
+                  <th>Registration</th>
+                  <th>Make &amp; Model</th>
+                  <th>Year</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Mileage</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data?.items && data.items.length > 0 ? (
+                  data.items.map(vehicle => (
+                    <tr key={vehicle.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                          <div style={{ width: 32, height: 32, background: 'var(--primary-light)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Car size={15} color="var(--primary)" />
+                          </div>
+                          <strong>{vehicle.registrationNumber}</strong>
+                        </div>
+                      </td>
+                      <td>{vehicle.make} {vehicle.model}</td>
+                      <td>{vehicle.year}</td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{vehicle.vehicleType}</td>
+                      <td><span className={getStatusBadge(String(vehicle.status))}>{vehicle.status}</span></td>
+                      <td>{vehicle.mileage.toLocaleString()} km</td>
+                      <td>
+                        <div className="action-btns">
+                          <button className="btn-icon" title="Edit" onClick={() => navigate(`/vehicles/${vehicle.id}/edit`)}><Pencil size={13} /></button>
+                          <button className="btn-icon danger" title="Archive" onClick={() => deleteVehicle(vehicle)}><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={7} className="state-container" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No vehicles found. Add your first vehicle.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

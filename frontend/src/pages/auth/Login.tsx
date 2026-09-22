@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car, AlertCircle } from 'lucide-react';
+import { Car, AlertCircle, Shield, BarChart2, Truck } from 'lucide-react';
 import { authService } from '../../services/authService';
 import './Login.css';
 
@@ -28,69 +28,89 @@ const Login = () => {
 
   return (
     <div className="login-container">
-      <div className="login-card glass-panel fade-in">
-        <div className="login-header">
-          <div className="login-logo bg-primary">
-            <Car size={32} color="white" />
+      {/* Left Branding Panel */}
+      <div className="login-left-panel">
+        <div className="login-brand">
+          <div className="login-brand-logo">
+            <Car size={36} color="white" />
           </div>
-          <h2>Welcome to FleetOS</h2>
-          <p>Please sign in to your account</p>
-        </div>
+          <h1>Fleet<span>OS</span></h1>
+          <p>The complete fleet management platform for modern enterprises. Monitor, manage and optimize your entire fleet.</p>
 
-        {error && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            color: '#ef4444',
-            padding: '10px 14px',
-            borderRadius: '6px',
-            marginBottom: '16px',
-            fontSize: '0.875rem'
-          }}>
-            <AlertCircle size={18} />
-            <span>{error}</span>
+          <div className="login-features">
+            <div className="login-feature-item">
+              <div className="login-feature-icon"><Truck size={16} /></div>
+              <span>Real-time vehicle tracking and management</span>
+            </div>
+            <div className="login-feature-item">
+              <div className="login-feature-icon"><BarChart2 size={16} /></div>
+              <span>Advanced analytics and reporting</span>
+            </div>
+            <div className="login-feature-item">
+              <div className="login-feature-icon"><Shield size={16} /></div>
+              <span>Comprehensive incident and safety management</span>
+            </div>
           </div>
-        )}
-        
-        <form onSubmit={handleLogin} className="login-form">
-          <div className="form-group">
-            <label>Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@fleetos.com"
-              required
-              className="form-control"
-            />
+        </div>
+      </div>
+
+      {/* Right Form Panel */}
+      <div className="login-right-panel">
+        <div className="login-card">
+          <div className="login-header">
+            <h2>Welcome back</h2>
+            <p>Sign in to your administrator account</p>
           </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="form-control"
-            />
+
+          {error && (
+            <div className="login-error">
+              <AlertCircle size={15} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="login-form">
+            <div className="form-group">
+              <label>Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@fleetos.com"
+                required
+                className="form-control"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                className="form-control"
+              />
+            </div>
+
+            <div className="form-options">
+              <label className="checkbox-container">
+                <input type="checkbox" defaultChecked />
+                Remember me
+              </label>
+              <button type="button" className="forgot-password">Forgot password?</button>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="login-footer">
+            &copy; {new Date().getFullYear()} FleetOS &mdash; Fleet Management System
           </div>
-          
-          <div className="form-options">
-            <label className="checkbox-container">
-              <input type="checkbox" defaultChecked /> Remember me
-            </label>
-            <button type="button" className="forgot-password">Forgot password?</button>
-          </div>
-          
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? <span className="spinner"></span> : 'Sign In'}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   );

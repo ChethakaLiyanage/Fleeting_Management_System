@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { driverService } from '../../services/driverService';
 import { DriverDto, PagedResult } from '../../types';
-import { Plus, Search, Filter, Trash2 } from 'lucide-react';
-import '../vehicles/Vehicles.css'; // Re-use table styles
+import { Plus, Pencil, Trash2, Users, AlertCircle } from 'lucide-react';
+import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Drivers = () => {
   const [data, setData] = useState<PagedResult<DriverDto> | null>(null);
@@ -11,99 +11,106 @@ const Drivers = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchDrivers();
-  }, []);
+  useEffect(() => { fetchDrivers(); }, []);
 
   const fetchDrivers = async () => {
     try {
       setLoading(true);
       const res = await driverService.getDrivers();
-      if (res.success && res.data) {
-        setData(res.data);
-      } else {
-        setError(res.message || 'Failed to load drivers');
-      }
-    } catch (err) {
-      setError('Network error: Could not reach the server');
-    } finally {
-      setLoading(false);
-    }
+      if (res.success && res.data) setData(res.data);
+      else setError(res.message || 'Failed to load drivers');
+    } catch { setError('Network error: Could not reach the server'); }
+    finally { setLoading(false); }
   };
 
   const deleteDriver = async (driver: DriverDto) => {
-    if (!window.confirm(`Deactivate driver ${driver.fullName} (${driver.employeeNumber})?`)) return;
-    try { await driverService.deleteDriver(driver.id); await fetchDrivers(); } catch (err: any) { setError(err.response?.data?.message || 'Could not deactivate driver.'); }
+    if (!window.confirm(`Deactivate driver ${driver.fullName}?`)) return;
+    try { await driverService.deleteDriver(driver.id); await fetchDrivers(); }
+    catch (err: any) { setError(err.response?.data?.message || 'Could not deactivate driver.'); }
   };
 
   return (
-    <div className="vehicles-container fade-in">
+    <div>
       <div className="page-header">
-        <h1>Drivers Management</h1>
-        <button className="btn btn-primary" onClick={() => navigate('/drivers/new')}>
-          <Plus size={18} /> Add Driver
-        </button>
-      </div>
-
-      <div className="table-controls glass-panel">
-        <div className="search-box">
-          <Search size={18} className="search-icon" />
-          <input type="text" placeholder="Search by name or license..." />
+        <div className="page-header-left">
+          <h1>Drivers</h1>
+          <p>Manage your fleet drivers and licenses</p>
         </div>
-        <button className="btn filter-btn">
-          <Filter size={18} /> Filters
+        <button className="btn btn-primary" onClick={() => navigate('/drivers/new')}>
+          <Plus size={16} /> Add Driver
         </button>
       </div>
 
-      <div className="data-table-wrapper glass-panel">
+      <div className="table-card">
+        <div className="table-card-header">
+          <div>
+            <div className="table-card-title">All Drivers</div>
+            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="loading-state">Loading drivers...</div>
+          <div className="state-container"><span className="spinner" style={{ border: '2px solid #e5e7eb', borderTop: '2px solid var(--primary)' }} /><p>Loading drivers...</p></div>
         ) : error ? (
-          <div className="error-state">
-            <p>{error}</p>
-            <button className="btn btn-primary" onClick={fetchDrivers}>Retry</button>
+          <div className="state-container" style={{ color: 'var(--danger)' }}>
+            <AlertCircle size={24} /><p>{error}</p>
+            <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={fetchDrivers}>Retry</button>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Employee #</th>
-                <th>License</th>
-                <th>Status</th>
-                <th>Contact</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.items && data.items.length > 0 ? (
-                data.items.map(driver => (
-                  <tr key={driver.id}>
-                    <td><strong>{driver.fullName}</strong></td>
-                    <td>{driver.employeeNumber}</td>
-                    <td>
-                      {driver.licenseNumber}
-                      {driver.isLicenseExpired && <span style={{color: 'red', marginLeft: '5px', fontSize: '0.8rem'}}>(Expired)</span>}
-                    </td>
-                    <td>
-                      <span className={`status-badge status-${driver.status}`}>
-                        {driver.status}
-                      </span>
-                    </td>
-                    <td>{driver.phone}</td>
-                    <td>
-                      <Link className="action-btn" to={`/drivers/${driver.id}/edit`}>Edit</Link>{' '}
-                      <button className="action-btn" onClick={() => deleteDriver(driver)} title="Deactivate driver"><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="empty-state">No drivers found.</td>
+                  <th>Driver</th>
+                  <th>Employee #</th>
+                  <th>License No.</th>
+                  <th>License Expiry</th>
+                  <th>Status</th>
+                  <th>Phone</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data?.items && data.items.length > 0 ? (
+                  data.items.map(driver => (
+                    <tr key={driver.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                          <div style={{ width: 34, height: 34, background: 'linear-gradient(135deg, var(--primary), #7f1d1d)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.8125rem', flexShrink: 0 }}>
+                            {driver.fullName.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{driver.fullName}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{driver.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{driver.employeeNumber}</td>
+                      <td style={{ fontSize: '0.8125rem' }}>{driver.licenseNumber}</td>
+                      <td>
+                        {driver.isLicenseExpired
+                          ? <span className="badge badge-danger">Expired</span>
+                          : <span style={{ fontSize: '0.8125rem' }}>{driver.licenseExpiry ? new Date(driver.licenseExpiry).toLocaleDateString() : '—'}</span>
+                        }
+                      </td>
+                      <td><span className={getStatusBadge(String(driver.status))}>{driver.status}</span></td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{driver.phone}</td>
+                      <td>
+                        <div className="action-btns">
+                          <button className="btn-icon" title="Edit" onClick={() => navigate(`/drivers/${driver.id}/edit`)}><Pencil size={13} /></button>
+                          <button className="btn-icon danger" title="Deactivate" onClick={() => deleteDriver(driver)}><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={7}>
+                    <div className="state-container"><Users size={32} style={{ opacity: 0.3 }} /><p>No drivers found. Add your first driver.</p></div>
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

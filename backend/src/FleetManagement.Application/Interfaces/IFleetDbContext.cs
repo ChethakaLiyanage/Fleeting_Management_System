@@ -18,9 +18,9 @@ public interface IFleetDbContext
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<FuelRecord> FuelRecords { get; }
     DbSet<MaintenanceRecord> MaintenanceRecords { get; }
-    DbSet<Expense> Expenses { get; }
-    DbSet<InsurancePolicy> InsurancePolicies { get; }
-    DbSet<Document> Documents { get; }
+    // DbSet<Expense> Expenses { get; }
+    // DbSet<InsurancePolicy> InsurancePolicies { get; }
+    // DbSet<Document> Documents { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<AuditLog> AuditLogs { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

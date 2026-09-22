@@ -61,8 +61,8 @@ public class DashboardService : IDashboardService
         {
             TotalVehicles              = vehicles.Count,
             AvailableVehicles          = vehicles.Count(v => v.Status == VehicleStatus.Available),
-            VehiclesInUse             = vehicles.Count(v => v.Status == VehicleStatus.InUse),
-            VehiclesUnderMaintenance   = vehicles.Count(v => v.Status == VehicleStatus.UnderMaintenance),
+            ActiveVehicles             = vehicles.Count(v => v.Status == VehicleStatus.Active),
+            VehiclesInMaintenance      = vehicles.Count(v => v.Status == VehicleStatus.InMaintenance),
             TotalDrivers               = drivers.Count,
             AvailableDrivers           = drivers.Count(d => d.Status == DriverStatus.Available),
             TripsToday                 = trips.Count(t => t.StartTime.Date == today),

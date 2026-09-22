@@ -123,6 +123,7 @@ public class ReportService : IReportService
                                ? $"{trips.First(t => t.DriverId == did).Driver!.FirstName} {trips.First(t => t.DriverId == did).Driver!.LastName}"
                                : "-",
             TotalTrips       = trips.Count(t => t.DriverId == did),
+            ActiveTrips      = trips.Count(t => t.DriverId == did && t.Status == TripStatus.InProgress),
             TotalDistanceKm  = trips.Where(t => t.DriverId == did)
                                     .Sum(t => t.EndMileage.HasValue ? t.EndMileage.Value - t.StartMileage : 0),
             IncidentsCount   = incidents.Count(i => i.DriverId == did),

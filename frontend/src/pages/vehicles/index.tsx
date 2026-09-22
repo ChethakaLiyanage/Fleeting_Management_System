@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { vehicleService } from '../../services/vehicleService';
 import { VehicleDto, PagedResult } from '../../types';
-import { Plus, Pencil, Trash2, Car } from 'lucide-react';
+import { Plus, Pencil, Trash2, Car, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Vehicles = () => {
   const [data, setData] = useState<PagedResult<VehicleDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchVehicles(); }, []);
@@ -29,9 +30,18 @@ const Vehicles = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not archive vehicle.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = (data?.items ?? []).filter(v =>
+    !q ||
+    v.registrationNumber?.toLowerCase().includes(q) ||
+    v.make?.toLowerCase().includes(q) ||
+    v.model?.toLowerCase().includes(q) ||
+    String(v.vehicleType)?.toLowerCase().includes(q) ||
+    String(v.status)?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
-      {/* Page Header */}
       <div className="page-header">
         <div className="page-header-left">
           <h1>Vehicles</h1>
@@ -42,12 +52,21 @@ const Vehicles = () => {
         </button>
       </div>
 
-      {/* Table Card */}
       <div className="table-card">
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Vehicles</div>
-            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data?.totalCount ?? 0} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by registration, make, model..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -73,8 +92,8 @@ const Vehicles = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.items && data.items.length > 0 ? (
-                  data.items.map(vehicle => (
+                {filtered.length > 0 ? (
+                  filtered.map(vehicle => (
                     <tr key={vehicle.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
@@ -98,7 +117,9 @@ const Vehicles = () => {
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan={7} className="state-container" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No vehicles found. Add your first vehicle.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {query ? `No vehicles matching "${query}".` : 'No vehicles found. Add your first vehicle.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
@@ -110,3 +131,4 @@ const Vehicles = () => {
 };
 
 export default Vehicles;
+

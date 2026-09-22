@@ -71,7 +71,7 @@
 
 /* Bar chart */
 .chart-wrap {
-  height: 220px;
+  height: 260px;
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
@@ -85,6 +85,24 @@
   align-items: center;
   gap: 0.5rem;
   flex: 1;
+  height: 100%;
+}
+
+.chart-bar-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  flex: 1;
+}
+
+.chart-bar-value {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
 }
 
 .chart-bar {
@@ -94,6 +112,7 @@
   border-radius: 6px 6px 0 0;
   animation: growUp 0.8s ease-out forwards;
   transform-origin: bottom;
+  min-height: 4px; /* Ensure even 0% has a tiny sliver visible */
 }
 
 .chart-bar.accent {

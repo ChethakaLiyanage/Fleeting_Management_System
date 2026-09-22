@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { incidentService } from '../../services/incidentService';
 import { IncidentDto, PagedResult } from '../../types';
-import { Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Incidents = () => {
   const [data, setData] = useState<PagedResult<IncidentDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchIncidents(); }, []);
@@ -29,6 +30,16 @@ const Incidents = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not delete incident.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = (data?.items ?? []).filter(i =>
+    !q ||
+    i.vehicleRegistration?.toLowerCase().includes(q) ||
+    i.description?.toLowerCase().includes(q) ||
+    String(i.type)?.toLowerCase().includes(q) ||
+    String(i.severity)?.toLowerCase().includes(q) ||
+    String(i.status)?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -45,7 +56,17 @@ const Incidents = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Incidents</div>
-            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data?.totalCount ?? 0} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by vehicle, type, severity..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -71,8 +92,8 @@ const Incidents = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.items && data.items.length > 0 ? (
-                  data.items.map(incident => (
+                {filtered.length > 0 ? (
+                  filtered.map(incident => (
                     <tr key={incident.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -97,7 +118,7 @@ const Incidents = () => {
                   ))
                 ) : (
                   <tr><td colSpan={7}>
-                    <div className="state-container"><AlertTriangle size={32} style={{ opacity: 0.3 }} /><p>No incidents found. All clear!</p></div>
+                    <div className="state-container"><AlertTriangle size={32} style={{ opacity: 0.3 }} /><p>{query ? `No incidents matching "${query}".` : 'No incidents found. All clear!'}</p></div>
                   </td></tr>
                 )}
               </tbody>

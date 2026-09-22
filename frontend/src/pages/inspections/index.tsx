@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { inspectionService } from '../../services/inspectionService';
 import { InspectionDto, PagedResult } from '../../types';
-import { Plus, Pencil, Trash2, FileCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileCheck, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Inspections = () => {
   const [data, setData] = useState<PagedResult<InspectionDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchInspections(); }, []);
@@ -29,6 +30,15 @@ const Inspections = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not delete inspection.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = (data?.items ?? []).filter(i =>
+    !q ||
+    i.vehicleRegistrationNumber?.toLowerCase().includes(q) ||
+    i.driverName?.toLowerCase().includes(q) ||
+    String(i.type)?.toLowerCase().includes(q) ||
+    i.result?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -45,7 +55,17 @@ const Inspections = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Inspections</div>
-            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data?.totalCount ?? 0} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by vehicle, driver, type, result..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -70,8 +90,8 @@ const Inspections = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.items && data.items.length > 0 ? (
-                  data.items.map(inspection => (
+                {filtered.length > 0 ? (
+                  filtered.map(inspection => (
                     <tr key={inspection.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -95,7 +115,7 @@ const Inspections = () => {
                   ))
                 ) : (
                   <tr><td colSpan={6}>
-                    <div className="state-container"><FileCheck size={32} style={{ opacity: 0.3 }} /><p>No inspections found. Record your first inspection.</p></div>
+                    <div className="state-container"><FileCheck size={32} style={{ opacity: 0.3 }} /><p>{query ? `No inspections matching "${query}".` : 'No inspections found. Record your first inspection.'}</p></div>
                   </td></tr>
                 )}
               </tbody>

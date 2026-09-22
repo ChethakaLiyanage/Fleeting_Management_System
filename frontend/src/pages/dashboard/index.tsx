@@ -132,20 +132,35 @@ const Dashboard = () => {
             {/* Fleet Utilization Bar Chart */}
             <div className="activity-card">
               <div className="activity-card-title">Fleet Utilization</div>
-              <div className="chart-wrap">
-                {[
-                  { label: 'Available', height: summary?.availableVehicles ? Math.min(100, (summary.availableVehicles / (summary.totalVehicles || 1)) * 100) : 60, accent: false },
-                  { label: 'Trips', height: summary?.activeTrips ? Math.min(100, summary.activeTrips * 10 + 10) : 40, accent: false },
-                  { label: 'Maint.', height: summary?.vehiclesUnderMaintenance ? Math.min(100, (summary.vehiclesUnderMaintenance / (summary.totalVehicles || 1)) * 100 + 10) : 20, accent: true },
-                  { label: 'Incidents', height: summary?.openIncidentsCount ? Math.min(100, summary.openIncidentsCount * 15) : 10, accent: true },
-                  { label: 'Drivers', height: summary?.availableDrivers ? Math.min(100, (summary.availableDrivers / (summary.totalDrivers || 1)) * 100) : 80, accent: false },
-                ].map((bar, i) => (
-                  <div key={i} className="chart-bar-group">
-                    <div className={`chart-bar ${bar.accent ? 'accent' : ''}`} style={{ height: `${bar.height}%` }} />
-                    <div className="chart-bar-label">{bar.label}</div>
-                  </div>
-                ))}
-              </div>
+              {(!summary || (
+                (summary.availableVehicles ?? 0) === 0 && 
+                (summary.activeTrips ?? 0) === 0 && 
+                (summary.vehiclesUnderMaintenance ?? 0) === 0 && 
+                (summary.openIncidentsCount ?? 0) === 0 && 
+                (summary.availableDrivers ?? 0) === 0
+              )) ? (
+                <div style={{ height: '260px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                  No fleet activity data available yet.
+                </div>
+              ) : (
+                <div className="chart-wrap">
+                  {[
+                    { label: 'Available', value: summary?.availableVehicles, height: summary?.availableVehicles ? Math.min(100, (summary.availableVehicles / (summary.totalVehicles || 1)) * 100) : 0, accent: false },
+                    { label: 'Trips', value: summary?.activeTrips, height: summary?.activeTrips ? Math.min(100, (summary.activeTrips / (summary.totalVehicles || 1)) * 100) : 0, accent: false },
+                    { label: 'Maint.', value: summary?.vehiclesUnderMaintenance, height: summary?.vehiclesUnderMaintenance ? Math.min(100, (summary.vehiclesUnderMaintenance / (summary.totalVehicles || 1)) * 100) : 0, accent: true },
+                    { label: 'Incidents', value: summary?.openIncidentsCount, height: summary?.openIncidentsCount ? Math.min(100, (summary.openIncidentsCount / (summary.totalVehicles || 1)) * 100) : 0, accent: true },
+                    { label: 'Drivers', value: summary?.availableDrivers, height: summary?.availableDrivers ? Math.min(100, (summary.availableDrivers / (summary.totalDrivers || 1)) * 100) : 0, accent: false },
+                  ].map((bar, i) => (
+                    <div key={i} className="chart-bar-group">
+                      <div className="chart-bar-container">
+                        <div className="chart-bar-value">{Number(bar.value ?? 0)}</div>
+                        <div className={`chart-bar ${bar.accent ? 'accent' : ''}`} style={{ height: `max(4px, ${bar.height}%)` }} />
+                      </div>
+                      <div className="chart-bar-label">{bar.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fuelService } from '../../services/fuelService';
 import { FuelRecordDto } from '../../types';
-import { Plus, Pencil, Trash2, Droplet } from 'lucide-react';
+import { Plus, Pencil, Trash2, Droplet, Search } from 'lucide-react';
 
 const Fuel = () => {
   const [data, setData] = useState<FuelRecordDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchFuel(); }, []);
@@ -31,6 +32,15 @@ const Fuel = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not delete fuel log.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = data.filter(f =>
+    !q ||
+    f.vehicleRegistration?.toLowerCase().includes(q) ||
+    f.driverName?.toLowerCase().includes(q) ||
+    String(f.fuelType)?.toLowerCase().includes(q) ||
+    f.station?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -47,7 +57,17 @@ const Fuel = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Fuel Logs</div>
-            <div className="table-card-subtitle">{data.length} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data.length} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by vehicle, driver, fuel type..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -75,8 +95,8 @@ const Fuel = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.length > 0 ? (
-                  data.map(log => (
+                {filtered.length > 0 ? (
+                  filtered.map(log => (
                     <tr key={log.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -107,7 +127,7 @@ const Fuel = () => {
                   ))
                 ) : (
                   <tr><td colSpan={9}>
-                    <div className="state-container"><Droplet size={32} style={{ opacity: 0.3 }} /><p>No fuel records found. Log your first fuel entry.</p></div>
+                    <div className="state-container"><Droplet size={32} style={{ opacity: 0.3 }} /><p>{query ? `No fuel records matching "${query}".` : 'No fuel records found. Log your first fuel entry.'}</p></div>
                   </td></tr>
                 )}
               </tbody>

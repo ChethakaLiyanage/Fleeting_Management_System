@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { driverService } from '../../services/driverService';
 import { DriverDto, PagedResult } from '../../types';
-import { Plus, Pencil, Trash2, Users, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, AlertCircle, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Drivers = () => {
   const [data, setData] = useState<PagedResult<DriverDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchDrivers(); }, []);
@@ -29,6 +30,16 @@ const Drivers = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not deactivate driver.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = (data?.items ?? []).filter(d =>
+    !q ||
+    d.fullName?.toLowerCase().includes(q) ||
+    d.email?.toLowerCase().includes(q) ||
+    d.employeeNumber?.toLowerCase().includes(q) ||
+    d.licenseNumber?.toLowerCase().includes(q) ||
+    String(d.status)?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -45,7 +56,17 @@ const Drivers = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Drivers</div>
-            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data?.totalCount ?? 0} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by name, email, employee #..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -71,8 +92,8 @@ const Drivers = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.items && data.items.length > 0 ? (
-                  data.items.map(driver => (
+                {filtered.length > 0 ? (
+                  filtered.map(driver => (
                     <tr key={driver.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
@@ -105,7 +126,7 @@ const Drivers = () => {
                   ))
                 ) : (
                   <tr><td colSpan={7}>
-                    <div className="state-container"><Users size={32} style={{ opacity: 0.3 }} /><p>No drivers found. Add your first driver.</p></div>
+                    <div className="state-container"><Users size={32} style={{ opacity: 0.3 }} /><p>{query ? `No drivers matching "${query}".` : 'No drivers found. Add your first driver.'}</p></div>
                   </td></tr>
                 )}
               </tbody>

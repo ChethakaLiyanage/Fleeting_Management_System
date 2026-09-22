@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripService } from '../../services/tripService';
 import { TripDto, PagedResult } from '../../types';
-import { Plus, Pencil, Trash2, Map } from 'lucide-react';
+import { Plus, Pencil, Trash2, Map, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const Trips = () => {
   const [data, setData] = useState<PagedResult<TripDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchTrips(); }, []);
@@ -29,6 +30,17 @@ const Trips = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not delete trip.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = (data?.items ?? []).filter(t =>
+    !q ||
+    t.tripNumber?.toLowerCase().includes(q) ||
+    t.vehicleRegistrationNumber?.toLowerCase().includes(q) ||
+    t.driverName?.toLowerCase().includes(q) ||
+    t.startLocation?.toLowerCase().includes(q) ||
+    t.destination?.toLowerCase().includes(q) ||
+    String(t.status)?.toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -45,7 +57,17 @@ const Trips = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Trips</div>
-            <div className="table-card-subtitle">{data?.totalCount ?? 0} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data?.totalCount ?? 0} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by trip #, vehicle, driver, route..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -71,8 +93,8 @@ const Trips = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.items && data.items.length > 0 ? (
-                  data.items.map(trip => (
+                {filtered.length > 0 ? (
+                  filtered.map(trip => (
                     <tr key={trip.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -101,7 +123,7 @@ const Trips = () => {
                   ))
                 ) : (
                   <tr><td colSpan={7}>
-                    <div className="state-container"><Map size={32} style={{ opacity: 0.3 }} /><p>No trips found. Log your first trip.</p></div>
+                    <div className="state-container"><Map size={32} style={{ opacity: 0.3 }} /><p>{query ? `No trips matching "${query}".` : 'No trips found. Log your first trip.'}</p></div>
                   </td></tr>
                 )}
               </tbody>

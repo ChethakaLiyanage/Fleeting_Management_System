@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { maintenanceService } from '../../services/maintenanceService';
 import { MaintenanceRecordDto } from '../../types';
-import { Plus, Pencil, Trash2, Wrench } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wrench, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
 const getTypeLabel = (type: number | string): string => {
@@ -29,6 +29,7 @@ const Maintenance = () => {
   const [data, setData] = useState<MaintenanceRecordDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => { fetchMaintenance(); }, []);
@@ -52,6 +53,16 @@ const Maintenance = () => {
     catch (err: any) { setError(err.response?.data?.message || 'Could not delete maintenance record.'); }
   };
 
+  const q = query.toLowerCase();
+  const filtered = data.filter(r =>
+    !q ||
+    r.vehicleRegistration?.toLowerCase().includes(q) ||
+    r.description?.toLowerCase().includes(q) ||
+    r.serviceProvider?.toLowerCase().includes(q) ||
+    getTypeLabel(r.type).toLowerCase().includes(q) ||
+    getStatusLabel(r.status).toLowerCase().includes(q)
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -68,7 +79,17 @@ const Maintenance = () => {
         <div className="table-card-header">
           <div>
             <div className="table-card-title">All Maintenance Records</div>
-            <div className="table-card-subtitle">{data.length} records found</div>
+            <div className="table-card-subtitle">{filtered.length} of {data.length} records</div>
+          </div>
+          <div className="table-search-wrap">
+            <Search size={15} className="table-search-icon" />
+            <input
+              type="text"
+              className="table-search-input"
+              placeholder="Search by vehicle, type, provider..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -95,8 +116,8 @@ const Maintenance = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.length > 0 ? (
-                  data.map(record => {
+                {filtered.length > 0 ? (
+                  filtered.map(record => {
                     const statusLabel = getStatusLabel(record.status);
                     return (
                       <tr key={record.id}>
@@ -130,7 +151,7 @@ const Maintenance = () => {
                   })
                 ) : (
                   <tr><td colSpan={8}>
-                    <div className="state-container"><Wrench size={32} style={{ opacity: 0.3 }} /><p>No maintenance records found. Schedule your first service.</p></div>
+                    <div className="state-container"><Wrench size={32} style={{ opacity: 0.3 }} /><p>{query ? `No maintenance records matching "${query}".` : 'No maintenance records found. Schedule your first service.'}</p></div>
                   </td></tr>
                 )}
               </tbody>

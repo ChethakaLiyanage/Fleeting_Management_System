@@ -1,7 +1,6 @@
 using FleetManagement.Application.DTOs.Dashboard;
 using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Enums;
-using FleetManagement.Infrastructure.Cache;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -20,13 +19,13 @@ public class DashboardService : IDashboardService
 
     public async Task<DashboardSummaryDto> GetSummaryAsync()
     {
-        if (_cache.TryGetValue(DashboardCacheInvalidator.CacheKey, out DashboardSummaryDto? cached) && cached != null)
+        if (_cache.TryGetValue(IDashboardCache.CacheKey, out DashboardSummaryDto? cached) && cached != null)
         {
             return cached;
         }
 
         var summary = await BuildSummaryAsync();
-        _cache.Set(DashboardCacheInvalidator.CacheKey, summary, TimeSpan.FromMinutes(5));
+        _cache.Set(IDashboardCache.CacheKey, summary, TimeSpan.FromMinutes(5));
         return summary;
     }
 
@@ -41,29 +40,20 @@ public class DashboardService : IDashboardService
         // Run CountAsync in database rather than loading entire tables into memory
         var totalVehicles            = await _context.Vehicles.CountAsync(v => !v.IsDeleted);
         var availableVehicles        = await _context.Vehicles.CountAsync(v => !v.IsDeleted && v.Status == VehicleStatus.Available);
-        var vehiclesInUse           = await _context.Vehicles.CountAsync(v => !v.IsDeleted && (v.Status == VehicleStatus.InUse || v.Status == VehicleStatus.OnTrip));
-        var vehiclesUnderMaintenance = await _context.Vehicles.CountAsync(v => !v.IsDeleted && (v.Status == VehicleStatus.UnderMaintenance || v.Status == VehicleStatus.Maintenance));
+        var vehiclesInUse           = await _context.Vehicles.CountAsync(v => !v.IsDeleted && (v.Status == VehicleStatus.OnTrip || v.Status == VehicleStatus.Assigned));
+        var vehiclesUnderMaintenance = await _context.Vehicles.CountAsync(v => !v.IsDeleted && v.Status == VehicleStatus.Maintenance);
 
         var totalDrivers             = await _context.Drivers.CountAsync(d => !d.IsDeleted);
         var availableDrivers         = await _context.Drivers.CountAsync(d => !d.IsDeleted && d.Status == DriverStatus.Available);
 
-        var tripsToday               = await _context.Trips.CountAsync(t => !t.IsDeleted && t.StartTime >= todayUtc && t.StartTime < tomorrowUtc);
+        var tripsToday               = await _context.Trips.CountAsync(t => !t.IsDeleted && t.StartTime.HasValue && t.StartTime.Value >= todayUtc && t.StartTime.Value < tomorrowUtc);
         var activeTrips              = await _context.Trips.CountAsync(t => !t.IsDeleted && t.Status == TripStatus.InProgress);
 
         var overdueMain = await _context.MaintenanceRecords
             .CountAsync(m => !m.IsDeleted && m.Status == MaintenanceStatus.Scheduled && m.ScheduledDate < now);
 
-        var expiringIns = await _context.InsurancePolicies
-            .CountAsync(p => !p.IsDeleted && p.ExpiryDate >= now && p.ExpiryDate <= expiryWindow);
-
-        var expiringDocs = await _context.Documents
-            .CountAsync(d => !d.IsDeleted && d.ExpiryDate.HasValue && d.ExpiryDate.Value >= now && d.ExpiryDate.Value <= expiryWindow);
-
-        var pendingExp = await _context.Expenses
-            .CountAsync(e => !e.IsDeleted && e.Status == ExpenseStatus.Pending);
-
         var openIncidents = await _context.Incidents
-            .CountAsync(i => !i.IsDeleted && i.Status != IncidentStatus.Closed);
+            .CountAsync(i => !i.IsDeleted && i.Status != IncidentStatus.Closed && i.Status != IncidentStatus.Resolved);
 
         var expiringLic = await _context.Drivers
             .CountAsync(d => !d.IsDeleted && d.LicenseExpiry >= now && d.LicenseExpiry <= expiryWindow);
@@ -87,9 +77,9 @@ public class DashboardService : IDashboardService
             TripsToday               = tripsToday,
             ActiveTrips              = activeTrips,
             OverdueMaintenanceCount  = overdueMain,
-            ExpiringInsuranceCount   = expiringIns,
-            ExpiringDocumentCount    = expiringDocs,
-            PendingExpensesCount     = pendingExp,
+            ExpiringInsuranceCount   = 0,
+            ExpiringDocumentCount    = 0,
+            PendingExpensesCount     = 0,
             ExpiringLicensesCount    = expiringLic,
             FuelCostThisMonth        = fuelCost,
             MaintenanceCostThisMonth = mainCost,
@@ -118,37 +108,6 @@ public class DashboardService : IDashboardService
             EntityId   = m.Id.ToString(),
             EntityName = m.Vehicle?.RegistrationNumber,
             DueDate    = m.ScheduledDate
-        }));
-
-        var expiringPolicies = await _context.InsurancePolicies
-            .Include(p => p.Vehicle)
-            .Where(p => !p.IsDeleted && p.ExpiryDate >= now && p.ExpiryDate <= window)
-            .AsNoTracking()
-            .ToListAsync();
-
-        alerts.AddRange(expiringPolicies.Select(p => new AlertDto
-        {
-            Type       = "InsuranceExpiring",
-            Severity   = "Medium",
-            Message    = $"Insurance policy {p.PolicyNumber} for {p.Vehicle?.RegistrationNumber} expires in {(p.ExpiryDate - now).Days} days",
-            EntityId   = p.Id.ToString(),
-            EntityName = p.Vehicle?.RegistrationNumber,
-            DueDate    = p.ExpiryDate
-        }));
-
-        var expiringDocs = await _context.Documents
-            .Where(d => !d.IsDeleted && d.ExpiryDate.HasValue && d.ExpiryDate.Value >= now && d.ExpiryDate.Value <= window)
-            .AsNoTracking()
-            .ToListAsync();
-
-        alerts.AddRange(expiringDocs.Select(d => new AlertDto
-        {
-            Type       = "DocumentExpiring",
-            Severity   = "Low",
-            Message    = $"Document '{d.Title}' expires in {(d.ExpiryDate!.Value - now).Days} days",
-            EntityId   = d.Id.ToString(),
-            EntityName = d.Title,
-            DueDate    = d.ExpiryDate
         }));
 
         var expiringDrivers = await _context.Drivers

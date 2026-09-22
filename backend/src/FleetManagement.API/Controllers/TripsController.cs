@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager,Driver")]
+[Authorize(Roles = "Admin,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class TripsController : ControllerBase
@@ -40,7 +40,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateTrip([FromBody] CreateTripDto dto, CancellationToken cancellationToken)
@@ -50,7 +50,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -62,6 +62,14 @@ public class TripsController : ControllerBase
             return NotFound(ApiResponse<TripDto>.Fail($"Trip with ID '{id}' was not found."));
         }
         return Ok(ApiResponse<TripDto>.Ok(trip, "Trip updated successfully."));
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteTrip(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await _tripService.DeleteTripAsync(id, cancellationToken);
+        return deleted ? NoContent() : NotFound(ApiResponse<bool>.Fail($"Trip with ID '{id}' was not found."));
     }
 
     [HttpPost("{id:guid}/start")]
@@ -83,7 +91,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CancelTrip(Guid id, [FromQuery] string? reason, CancellationToken cancellationToken)

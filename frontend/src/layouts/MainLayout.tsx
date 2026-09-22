@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Car, Users, LogOut, Settings, Map, Wrench, FileCheck, AlertTriangle, Droplet, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Car, Users, LogOut, Settings, Map, Wrench, FileCheck, AlertTriangle, Droplet } from 'lucide-react';
+import { authService } from '../services/authService';
 import './MainLayout.css';
 
 const MainLayout = () => {
@@ -30,11 +31,6 @@ const MainLayout = () => {
             <span>Drivers</span>
           </NavLink>
           
-          <NavLink to="/assignments" className={({isActive}) => isActive ? 'nav-item active' : 'nav-item'}>
-            <ClipboardList size={20} />
-            <span>Assignments</span>
-          </NavLink>
-
           <NavLink to="/trips" className={({isActive}) => isActive ? 'nav-item active' : 'nav-item'}>
             <Map size={20} />
             <span>Trips</span>
@@ -62,7 +58,7 @@ const MainLayout = () => {
           
           <div className="nav-divider"></div>
           
-          <button className="nav-item btn-logout">
+          <button className="nav-item btn-logout" onClick={() => authService.logout()}>
             <LogOut size={20} />
             <span>Logout</span>
           </button>

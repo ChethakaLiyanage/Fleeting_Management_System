@@ -156,7 +156,6 @@ public class VehicleService : IVehicleService
             RegistrationExpiry         = vehicle.RegistrationExpiry,
             IsRegistrationExpiringSoon = isExpiringSoon,
             TotalTrips                 = 0,
-            TotalAssignments           = 0,
             TotalInspections           = 0,
             TotalIncidents             = 0
         };
@@ -247,6 +246,9 @@ public class VehicleService : IVehicleService
             .FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken);
 
         if (vehicle == null) return false;
+
+        if (await _context.Trips.AnyAsync(t => t.VehicleId == id && !t.IsDeleted && t.Status != TripStatus.Completed && t.Status != TripStatus.Cancelled, cancellationToken))
+            throw new InvalidOperationException("Cannot archive a vehicle with an active trip.");
 
         vehicle.Status    = VehicleStatus.Retired;
         vehicle.IsDeleted = true;

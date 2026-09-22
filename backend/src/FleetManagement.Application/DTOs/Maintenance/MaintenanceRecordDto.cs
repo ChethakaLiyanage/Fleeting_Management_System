@@ -1,3 +1,5 @@
+using FleetManagement.Domain.Enums;
+
 namespace FleetManagement.Application.DTOs.Maintenance;
 
 public class MaintenanceRecordDto
@@ -5,8 +7,8 @@ public class MaintenanceRecordDto
     public Guid Id { get; set; }
     public Guid VehicleId { get; set; }
     public string? VehicleRegistration { get; set; }
-    public string Type { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+    public MaintenanceType Type { get; set; }
+    public MaintenanceStatus Status { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? ServiceProvider { get; set; }
     public DateTime ScheduledDate { get; set; }
@@ -17,4 +19,6 @@ public class MaintenanceRecordDto
     public DateTime? NextServiceDate { get; set; }
     public string? Notes { get; set; }
     public bool IsOverdue { get; set; }
+    public bool IsCompleted { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

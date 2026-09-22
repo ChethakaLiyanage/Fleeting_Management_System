@@ -53,7 +53,7 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<VehicleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -64,7 +64,7 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<VehicleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -80,7 +80,7 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ArchiveVehicle(Guid id, CancellationToken cancellationToken)

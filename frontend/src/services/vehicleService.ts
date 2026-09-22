@@ -12,5 +12,17 @@ export const vehicleService = {
   getVehicleById: async (id: string) => {
     const response = await api.get<ApiResponse<VehicleDto>>(`/vehicles/${id}`);
     return response.data;
-  }
+  },
+
+  createVehicle: async (payload: object) => {
+    const response = await api.post<ApiResponse<VehicleDto>>('/vehicles', payload);
+    return response.data;
+  },
+
+  updateVehicle: async (id: string, payload: object) => {
+    const response = await api.put<ApiResponse<VehicleDto>>(`/vehicles/${id}`, payload);
+    return response.data;
+  },
+
+  deleteVehicle: async (id: string) => api.delete(`/vehicles/${id}`)
 };

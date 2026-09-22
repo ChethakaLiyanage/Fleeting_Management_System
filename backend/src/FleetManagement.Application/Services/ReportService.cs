@@ -15,7 +15,7 @@ public class ReportService : IReportService
     {
         var trips = await _context.Trips
             .Include(t => t.Vehicle)
-            .Where(t => !t.IsDeleted && t.StartTime >= from && t.StartTime <= to)
+            .Where(t => !t.IsDeleted && t.StartTime.HasValue && t.StartTime.Value >= from && t.StartTime.Value <= to)
             .ToListAsync();
 
         var vehicleGroups = trips.GroupBy(t => t.VehicleId);
@@ -26,12 +26,12 @@ public class ReportService : IReportService
             VehicleId           = g.Key,
             RegistrationNumber  = g.First().Vehicle?.RegistrationNumber ?? "-",
             TotalTrips          = g.Count(),
-            TotalDistanceKm     = g.Sum(t => t.EndMileage.HasValue ? t.EndMileage.Value - t.StartMileage : 0),
-            TotalTripHours      = (decimal)g.Where(t => t.EndTime.HasValue)
-                                            .Sum(t => (t.EndTime!.Value - t.StartTime).TotalHours),
+            TotalDistanceKm     = g.Sum(t => (t.EndingMileage.HasValue && t.StartingMileage.HasValue) ? t.EndingMileage.Value - t.StartingMileage.Value : (t.Distance ?? 0)),
+            TotalTripHours      = (decimal)g.Where(t => t.EndTime.HasValue && t.StartTime.HasValue)
+                                            .Sum(t => (t.EndTime!.Value - t.StartTime!.Value).TotalHours),
             UtilizationPercent  = totalPeriodHours > 0
-                ? Math.Round((decimal)g.Where(t => t.EndTime.HasValue)
-                                       .Sum(t => (t.EndTime!.Value - t.StartTime).TotalHours)
+                ? Math.Round((decimal)g.Where(t => t.EndTime.HasValue && t.StartTime.HasValue)
+                                       .Sum(t => (t.EndTime!.Value - t.StartTime!.Value).TotalHours)
                              / (decimal)totalPeriodHours * 100, 2)
                 : 0
         }).ToList();
@@ -60,11 +60,6 @@ public class ReportService : IReportService
             .Where(m => !m.IsDeleted && m.CompletedDate >= from && m.CompletedDate <= to && m.Cost.HasValue)
             .ToListAsync();
 
-        var expenses = await _context.Expenses
-            .Where(e => !e.IsDeleted && e.ExpenseDate >= from && e.ExpenseDate <= to
-                && e.Status == ExpenseStatus.Approved)
-            .ToListAsync();
-
         var allVehicleIds = fuelRecords.Select(f => f.VehicleId)
             .Union(mainRecords.Select(m => m.VehicleId))
             .Distinct();
@@ -77,23 +72,23 @@ public class ReportService : IReportService
                                   ?? "-",
             FuelCost            = fuelRecords.Where(f => f.VehicleId == vid).Sum(f => f.TotalCost),
             MaintenanceCost     = mainRecords.Where(m => m.VehicleId == vid).Sum(m => m.Cost!.Value),
-            OtherCost           = expenses.Where(e => e.VehicleId == vid).Sum(e => e.Amount),
+            OtherCost           = 0m,
             TotalCost           = fuelRecords.Where(f => f.VehicleId == vid).Sum(f => f.TotalCost)
                                   + mainRecords.Where(m => m.VehicleId == vid).Sum(m => m.Cost!.Value)
-                                  + expenses.Where(e => e.VehicleId == vid).Sum(e => e.Amount)
         }).ToList();
+
+        var totalFuel = fuelRecords.Sum(f => f.TotalCost);
+        var totalMaint = mainRecords.Sum(m => m.Cost!.Value);
 
         return new CostReportDto
         {
             From                    = from,
             To                      = to,
-            TotalFuelCost           = fuelRecords.Sum(f => f.TotalCost),
-            TotalMaintenanceCost    = mainRecords.Sum(m => m.Cost!.Value),
+            TotalFuelCost           = totalFuel,
+            TotalMaintenanceCost    = totalMaint,
             TotalInsuranceCost      = 0,   // insurance premiums tracked separately
-            TotalOtherExpenses      = expenses.Sum(e => e.Amount),
-            GrandTotal              = fuelRecords.Sum(f => f.TotalCost)
-                                      + mainRecords.Sum(m => m.Cost!.Value)
-                                      + expenses.Sum(e => e.Amount),
+            TotalOtherExpenses      = 0,
+            GrandTotal              = totalFuel + totalMaint,
             PerVehicle              = perVehicle
         };
     }
@@ -102,19 +97,19 @@ public class ReportService : IReportService
     {
         var trips = await _context.Trips
             .Include(t => t.Driver)
-            .Where(t => !t.IsDeleted && t.StartTime >= from && t.StartTime <= to && t.DriverId.HasValue)
+            .Where(t => !t.IsDeleted && t.StartTime.HasValue && t.StartTime.Value >= from && t.StartTime.Value <= to)
             .ToListAsync();
 
         var incidents = await _context.Incidents
-            .Where(i => !i.IsDeleted && i.ReportedAt >= from && i.ReportedAt <= to && i.DriverId.HasValue)
+            .Where(i => !i.IsDeleted && i.Date >= from && i.Date <= to && i.DriverId.HasValue)
             .ToListAsync();
 
         var inspections = await _context.Inspections
-            .Where(i => !i.IsDeleted && i.InspectedAt >= from && i.InspectedAt <= to
+            .Where(i => !i.IsDeleted && i.InspectionDate >= from && i.InspectionDate <= to
                 && i.Result == InspectionResult.Failed)
             .ToListAsync();
 
-        var driverIds = trips.Select(t => t.DriverId!.Value).Distinct();
+        var driverIds = trips.Select(t => t.DriverId).Distinct();
 
         var driverStats = driverIds.Select(did => new DriverStatsDto
         {
@@ -125,7 +120,7 @@ public class ReportService : IReportService
             TotalTrips       = trips.Count(t => t.DriverId == did),
             ActiveTrips      = trips.Count(t => t.DriverId == did && t.Status == TripStatus.InProgress),
             TotalDistanceKm  = trips.Where(t => t.DriverId == did)
-                                    .Sum(t => t.EndMileage.HasValue ? t.EndMileage.Value - t.StartMileage : 0),
+                                    .Sum(t => (t.EndingMileage.HasValue && t.StartingMileage.HasValue) ? t.EndingMileage.Value - t.StartingMileage.Value : (t.Distance ?? 0)),
             IncidentsCount   = incidents.Count(i => i.DriverId == did),
             InspectionsFailed = inspections.Count(i => i.DriverId == did)
         }).ToList();

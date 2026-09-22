@@ -5,7 +5,7 @@ namespace FleetManagement.Domain.Entities;
 
 public class Driver : BaseEntity
 {
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
     public string EmployeeNumber { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
@@ -20,6 +20,7 @@ public class Driver : BaseEntity
     public DriverStatus Status { get; set; } = DriverStatus.Available;
     public DateTime JoinDate { get; set; } = DateTime.UtcNow;
     public string EmergencyContact { get; set; } = string.Empty;
+    public User User { get; set; } = null!;
 
     public bool IsLicenseExpired => LicenseExpiry <= DateTime.UtcNow;
 }

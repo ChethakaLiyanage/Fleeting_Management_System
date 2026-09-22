@@ -7,7 +7,7 @@ public class TripDto
     public Guid Id { get; set; }
     public string TripNumber { get; set; } = string.Empty;
     public Guid VehicleId { get; set; }
-    public string VehicleRegistration { get; set; } = string.Empty;
+    public string VehicleRegistrationNumber { get; set; } = string.Empty;
     public string VehicleMakeModel { get; set; } = string.Empty;
     public Guid DriverId { get; set; }
     public string DriverName { get; set; } = string.Empty;
@@ -19,7 +19,7 @@ public class TripDto
     public decimal? EndingMileage { get; set; }
     public decimal? Distance { get; set; }
     public string Purpose { get; set; } = string.Empty;
-    public TripStatus Status { get; set; }
+    public string Status { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

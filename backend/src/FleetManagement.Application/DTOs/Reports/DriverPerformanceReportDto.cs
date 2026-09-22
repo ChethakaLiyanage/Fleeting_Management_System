@@ -12,6 +12,7 @@ public class DriverStatsDto
     public Guid DriverId { get; set; }
     public string DriverName { get; set; } = string.Empty;
     public int TotalTrips { get; set; }
+    public int ActiveTrips { get; set; }
     public decimal TotalDistanceKm { get; set; }
     public int IncidentsCount { get; set; }
     public int InspectionsFailed { get; set; }

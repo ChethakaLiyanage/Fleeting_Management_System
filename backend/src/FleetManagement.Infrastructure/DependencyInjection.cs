@@ -18,8 +18,22 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        services.AddDbContext<FleetDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("Database connection string 'DefaultConnection' is not configured.");
+        }
+
+        try
+        {
+            services.AddDbContext<FleetDbContext>(options =>
+                options.UseNpgsql(connectionString));
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to configure PostgreSQL database connection. Connection string: {connectionString}. Error: {ex.Message}",
+                ex);
+        }
 
         services.AddScoped<IFleetDbContext>(provider => provider.GetRequiredService<FleetDbContext>());
 

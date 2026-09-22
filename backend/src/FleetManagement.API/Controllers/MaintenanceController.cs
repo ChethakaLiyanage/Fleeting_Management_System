@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager")]
+[Authorize(Roles = "Admin")]
 [ApiController]
 [Route("api/[controller]")]
 public class MaintenanceController : ControllerBase
@@ -42,6 +42,10 @@ public class MaintenanceController : ControllerBase
         var result = await _maintenanceService.CreateAsync(request);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateMaintenanceRequest request)
+        => Ok(await _maintenanceService.UpdateAsync(id, request));
 
     /// <summary>Update maintenance status (e.g. complete, cancel).</summary>
     [HttpPatch("{id:guid}/status")]

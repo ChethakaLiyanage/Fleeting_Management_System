@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dashboardService, DashboardSummaryDto } from '../../services/dashboardService';
-import { Activity, Car, CheckCircle, AlertTriangle, Users } from 'lucide-react';
+import { Activity, Car, AlertTriangle, Users } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -59,7 +59,7 @@ const Dashboard = () => {
               </div>
               <div className="stat-details">
                 <h3>Maintenance</h3>
-                <p className="stat-value">{summary?.vehiclesInMaintenance || 0}</p>
+                <p className="stat-value">{summary?.vehiclesUnderMaintenance || 0}</p>
               </div>
             </div>
             
@@ -69,7 +69,7 @@ const Dashboard = () => {
               </div>
               <div className="stat-details">
                 <h3>Open Incidents</h3>
-                <p className="stat-value">{summary?.openIncidents || 0}</p>
+                <p className="stat-value">{summary?.openIncidentsCount || 0}</p>
               </div>
             </div>
           </div>

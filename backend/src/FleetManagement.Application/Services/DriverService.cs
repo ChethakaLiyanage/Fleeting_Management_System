@@ -14,15 +14,18 @@ public class DriverService : IDriverService
     private readonly IFleetDbContext _context;
     private readonly IDashboardCache _dashboardCache;
     private readonly ILogger<DriverService> _logger;
+    private readonly IPasswordService _passwordService;
 
     public DriverService(
         IFleetDbContext context,
         IDashboardCache dashboardCache,
-        ILogger<DriverService> logger)
+        ILogger<DriverService> logger,
+        IPasswordService passwordService)
     {
         _context        = context;
         _dashboardCache = dashboardCache;
         _logger         = logger;
+        _passwordService = passwordService;
     }
 
     public async Task<PagedResult<DriverDto>> GetDriversAsync(DriverFilterParams filterParams, CancellationToken cancellationToken = default)
@@ -73,6 +76,7 @@ public class DriverService : IDriverService
             .Select(d => new DriverDto
             {
                 Id               = d.Id,
+                DriverId         = d.Id,
                 UserId           = d.UserId,
                 EmployeeNumber   = d.EmployeeNumber,
                 FirstName        = d.FirstName,
@@ -105,6 +109,7 @@ public class DriverService : IDriverService
             .Select(d => new DriverDto
             {
                 Id               = d.Id,
+                DriverId         = d.Id,
                 UserId           = d.UserId,
                 EmployeeNumber   = d.EmployeeNumber,
                 FirstName        = d.FirstName,
@@ -153,6 +158,10 @@ public class DriverService : IDriverService
 
     public async Task<DriverDto> CreateDriverAsync(CreateDriverDto dto, CancellationToken cancellationToken = default)
     {
+        var email = dto.Email.Trim().ToLowerInvariant();
+        if (await _context.Users.AnyAsync(u => u.Email.ToLower() == email, cancellationToken))
+            throw new ConflictException($"A user with email '{dto.Email}' already exists.");
+
         var empExists = await _context.Drivers
             .AnyAsync(d => d.EmployeeNumber.ToLower() == dto.EmployeeNumber.ToLower() && !d.IsDeleted, cancellationToken);
         if (empExists)
@@ -172,27 +181,44 @@ public class DriverService : IDriverService
             throw new InvalidOperationException("License expiry date must be after license issue date.");
         }
 
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Driver", cancellationToken)
+            ?? throw new InvalidOperationException("Driver role is not configured.");
+        var user = new User
+        {
+            FirstName = dto.FirstName.Trim(),
+            LastName = dto.LastName.Trim(),
+            Email = email,
+            PasswordHash = _passwordService.Hash(dto.InitialPassword),
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        user.UserRoles.Add(new UserRole { RoleId = role.Id });
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync(cancellationToken);
+
         var driver = new Driver
         {
-            UserId           = dto.UserId,
+            UserId           = user.Id,
             EmployeeNumber   = dto.EmployeeNumber.Trim(),
             FirstName        = dto.FirstName.Trim(),
             LastName         = dto.LastName.Trim(),
             Phone            = dto.Phone.Trim(),
-            Email            = dto.Email?.Trim(),
+            Email            = email,
             Address          = dto.Address.Trim(),
             LicenseNumber    = dto.LicenseNumber.Trim().ToUpper(),
             LicenseClass     = dto.LicenseClass.Trim(),
-            LicenseIssueDate = dto.LicenseIssueDate,
-            LicenseExpiry    = dto.LicenseExpiry,
+            LicenseIssueDate = NormalizeUtc(dto.LicenseIssueDate),
+            LicenseExpiry    = NormalizeUtc(dto.LicenseExpiry),
             Status           = DriverStatus.Available,
-            JoinDate         = dto.JoinDate ?? DateTime.UtcNow,
+            JoinDate         = dto.JoinDate.HasValue ? NormalizeUtc(dto.JoinDate.Value) : DateTime.UtcNow,
             EmergencyContact = dto.EmergencyContact.Trim(),
             CreatedAt        = DateTime.UtcNow
         };
 
         _context.Drivers.Add(driver);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         _logger.LogInformation("Driver created: {Id} {EmployeeNumber}", driver.Id, driver.EmployeeNumber);
         _dashboardCache.Invalidate();
@@ -203,9 +229,14 @@ public class DriverService : IDriverService
     public async Task<DriverDto?> UpdateDriverAsync(Guid id, UpdateDriverDto dto, CancellationToken cancellationToken = default)
     {
         var driver = await _context.Drivers
+            .Include(d => d.User)
             .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
 
         if (driver == null) return null;
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+        if (await _context.Users.AnyAsync(u => u.Id != driver.UserId && u.Email.ToLower() == email, cancellationToken))
+            throw new ConflictException($"A user with email '{dto.Email}' already exists.");
 
         var empExists = await _context.Drivers
             .AnyAsync(d => d.Id != id && d.EmployeeNumber.ToLower() == dto.EmployeeNumber.ToLower() && !d.IsDeleted, cancellationToken);
@@ -226,28 +257,36 @@ public class DriverService : IDriverService
             throw new InvalidOperationException("License expiry date must be after license issue date.");
         }
 
-        driver.UserId           = dto.UserId;
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        driver.User.FirstName    = dto.FirstName.Trim();
+        driver.User.LastName     = dto.LastName.Trim();
+        driver.User.Email        = email;
         driver.EmployeeNumber   = dto.EmployeeNumber.Trim();
         driver.FirstName        = dto.FirstName.Trim();
         driver.LastName         = dto.LastName.Trim();
         driver.Phone            = dto.Phone.Trim();
-        driver.Email            = dto.Email?.Trim();
+        driver.Email            = email;
         driver.Address          = dto.Address.Trim();
         driver.LicenseNumber    = dto.LicenseNumber.Trim().ToUpper();
         driver.LicenseClass     = dto.LicenseClass.Trim();
-        driver.LicenseIssueDate = dto.LicenseIssueDate;
-        driver.LicenseExpiry    = dto.LicenseExpiry;
+        driver.LicenseIssueDate = NormalizeUtc(dto.LicenseIssueDate);
+        driver.LicenseExpiry    = NormalizeUtc(dto.LicenseExpiry);
         driver.Status           = dto.Status;
         driver.EmergencyContact = dto.EmergencyContact.Trim();
         driver.UpdatedAt        = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         _logger.LogInformation("Driver updated: {Id} {EmployeeNumber}", driver.Id, driver.EmployeeNumber);
         _dashboardCache.Invalidate();
 
         return MapToDto(driver);
     }
+
+    private static DateTime NormalizeUtc(DateTime value) => value.Kind == DateTimeKind.Utc
+        ? value
+        : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
     public async Task<bool> DeactivateDriverAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -256,9 +295,16 @@ public class DriverService : IDriverService
 
         if (driver == null) return false;
 
+        if (await _context.Trips.AnyAsync(t => t.DriverId == id && !t.IsDeleted && t.Status != TripStatus.Completed && t.Status != TripStatus.Cancelled, cancellationToken))
+            throw new InvalidOperationException("Cannot deactivate a driver with an active trip.");
+
         driver.Status    = DriverStatus.Inactive;
         driver.IsDeleted = true;
         driver.UpdatedAt = DateTime.UtcNow;
+
+        var user = await _context.Users.FirstAsync(u => u.Id == driver.UserId, cancellationToken);
+        user.IsActive = false;
+        user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -271,6 +317,7 @@ public class DriverService : IDriverService
     private static DriverDto MapToDto(Driver driver) => new()
     {
         Id               = driver.Id,
+        DriverId         = driver.Id,
         UserId           = driver.UserId,
         EmployeeNumber   = driver.EmployeeNumber,
         FirstName        = driver.FirstName,

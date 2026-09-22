@@ -1,0 +1,1642 @@
+
+============================================================
+
+FILE: backend\src\FleetManagement.Domain\Common\BaseEntity.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Common;
+
+public abstract class BaseEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+    public bool IsDeleted { get; set; } = false;
+}
+
+============================================================
+
+FILE: backend\src\FleetManagement.Infrastructure\Data\FleetDbContext.cs
+
+============================================================
+
+using FleetManagement.Application.Interfaces;
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FleetManagement.Infrastructure.Data;
+
+public class FleetDbContext : DbContext, IFleetDbContext
+{
+    public FleetDbContext(DbContextOptions<FleetDbContext> options) : base(options)
+    {
+    }
+
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<Driver> Drivers => Set<Driver>();
+    public DbSet<VehicleAssignment> VehicleAssignments => Set<VehicleAssignment>();
+    public DbSet<Trip> Trips => Set<Trip>();
+    public DbSet<Inspection> Inspections => Set<Inspection>();
+    public DbSet<InspectionItem> InspectionItems => Set<InspectionItem>();
+    public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<FuelRecord> FuelRecords => Set<FuelRecord>();
+    public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
+    // public DbSet<Expense> Expenses => Set<Expense>();
+    // public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
+    // public DbSet<Document> Documents => Set<Document>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(FleetDbContext).Assembly);
+    }
+}
+
+============================================================
+
+FILE: backend\src\FleetManagement.Infrastructure\Data\SeedData.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using FleetManagement.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace FleetManagement.Infrastructure.Data;
+
+/// <summary>
+/// Seeds required database tables and lookup/reference data on startup.
+/// </summary>
+public static class SeedData
+{
+    private static readonly (string Name, string Description)[] Roles =
+    {
+        ("Admin",        "Full system access including user and role management."),
+        ("FleetManager", "Manage vehicles, drivers, trips, maintenance, and expenses."),
+        ("Driver",       "Access own trips, submit fuel records, and report incidents."),
+        ("Viewer",       "Read-only access to fleet data.")
+    };
+
+    public static async Task InitializeAsync(IServiceProvider services)
+    {
+        await using var scope  = services.CreateAsyncScope();
+        var context            = scope.ServiceProvider.GetRequiredService<FleetDbContext>();
+        var logger             = scope.ServiceProvider.GetRequiredService<ILogger<FleetDbContext>>();
+
+        try
+        {
+            // Test database connection first
+            if (!await context.Database.CanConnectAsync())
+            {
+                logger.LogError("Cannot connect to the database. Please check:");
+                logger.LogError("1. PostgreSQL server is running on localhost:5432");
+                logger.LogError("2. Database 'fleet_management' exists");
+                logger.LogError("3. Username 'postgres' and password are correct");
+                logger.LogError("4. Connection string in appsettings.json is correct");
+                throw new InvalidOperationException("Database connection failed. See logs for details.");
+            }
+
+            // Ensure database is created
+            await context.Database.MigrateAsync();
+            logger.LogInformation("Database migrated/created successfully.");
+
+            await SeedRolesAsync(context, logger);
+            await SeedSampleDataAsync(context, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while seeding the database.");
+            throw; // Re-throw to prevent silent failures
+        }
+    }
+
+    private static async Task SeedRolesAsync(FleetDbContext context, ILogger logger)
+    {
+        foreach (var (name, _) in Roles)
+        {
+            var exists = await context.Roles.AnyAsync(r => r.Name == name);
+            if (!exists)
+            {
+                context.Roles.Add(new Role { Name = name });
+                logger.LogInformation("Seeded role: {Role}", name);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedSampleDataAsync(FleetDbContext context, ILogger logger)
+    {
+        // 1. Seed Admin User
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+        if (adminRole != null && !await context.Users.AnyAsync(u => u.Email == "admin@fleetos.com"))
+        {
+            var adminUser = new User
+            {
+                FirstName    = "System",
+                LastName     = "Admin",
+                Email        = "admin@fleetos.com",
+                PasswordHash = "admin123",
+                IsActive     = true,
+                CreatedAt    = DateTime.UtcNow
+            };
+            adminUser.UserRoles.Add(new UserRole { RoleId = adminRole.Id });
+            context.Users.Add(adminUser);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded default admin user: admin@fleetos.com");
+        }
+
+        // 2. Seed Sample Vehicles
+        if (!await context.Vehicles.AnyAsync())
+        {
+            context.Vehicles.AddRange(
+                new Vehicle
+                {
+                    RegistrationNumber = "WP-CAB-1234",
+                    Make               = "Toyota",
+                    Model              = "HiAce",
+                    Year               = 2022,
+                    VehicleType        = VehicleType.Van,
+                    FuelType           = FuelType.Diesel,
+                    Transmission       = TransmissionType.Automatic,
+                    Color              = "White",
+                    Mileage            = 45200,
+                    Status             = VehicleStatus.Available,
+                    EngineNumber       = "1KD-FTV-8821",
+                    CreatedAt          = DateTime.UtcNow
+                },
+                new Vehicle
+                {
+                    RegistrationNumber = "WP-CAA-5678",
+                    Make               = "Isuzu",
+                    Model              = "NPR",
+                    Year               = 2021,
+                    VehicleType        = VehicleType.Truck,
+                    FuelType           = FuelType.Diesel,
+                    Transmission       = TransmissionType.Manual,
+                    Color              = "Blue",
+                    Mileage            = 89400,
+                    Status             = VehicleStatus.Available,
+                    EngineNumber       = "4HK1-TCS-4412",
+                    CreatedAt          = DateTime.UtcNow
+                },
+                new Vehicle
+                {
+                    RegistrationNumber = "WP-CAD-9012",
+                    Make               = "Nissan",
+                    Model              = "Caravan",
+                    Year               = 2023,
+                    VehicleType        = VehicleType.Van,
+                    FuelType           = FuelType.Petrol,
+                    Transmission       = TransmissionType.Automatic,
+                    Color              = "Silver",
+                    Mileage            = 21350,
+                    Status             = VehicleStatus.Available,
+                    EngineNumber       = "QR20DE-1903",
+                    CreatedAt          = DateTime.UtcNow
+                }
+            );
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded initial vehicles.");
+        }
+
+        // 3. Seed Sample Drivers
+        if (!await context.Drivers.AnyAsync())
+        {
+            context.Drivers.AddRange(
+                new Driver
+                {
+                    EmployeeNumber    = "DRV-001",
+                    FirstName         = "Sunil",
+                    LastName          = "Perera",
+                    Phone             = "+94 77 123 4567",
+                    Email             = "sunil@fleetos.com",
+                    Address           = "No. 45, Galle Road, Colombo",
+                    LicenseNumber     = "B1234567",
+                    LicenseClass      = "Heavy Vehicle",
+                    LicenseIssueDate  = DateTime.UtcNow.AddYears(-5),
+                    LicenseExpiry     = DateTime.UtcNow.AddYears(3),
+                    Status            = DriverStatus.Available,
+                    EmergencyContact  = "+94 71 987 6543",
+                    CreatedAt         = DateTime.UtcNow
+                },
+                new Driver
+                {
+                    EmployeeNumber    = "DRV-002",
+                    FirstName         = "Kasun",
+                    LastName          = "Silva",
+                    Phone             = "+94 71 234 5678",
+                    Email             = "kasun@fleetos.com",
+                    Address           = "No. 12, Kandy Road, Kelaniya",
+                    LicenseNumber     = "B7654321",
+                    LicenseClass      = "Light Vehicle",
+                    LicenseIssueDate  = DateTime.UtcNow.AddYears(-3),
+                    LicenseExpiry     = DateTime.UtcNow.AddYears(2),
+                    Status            = DriverStatus.Available,
+                    EmergencyContact  = "+94 77 555 4321",
+                    CreatedAt         = DateTime.UtcNow
+                }
+            );
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded initial drivers.");
+        }
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\AuditLog.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class AuditLog : BaseEntity
+{
+    public Guid? UserId { get; set; }
+    public User? User { get; set; }
+
+    public AuditAction Action { get; set; }
+
+    /// <summary>Entity type affected (e.g. "Vehicle", "Driver", "Expense").</summary>
+    public string EntityType { get; set; } = string.Empty;
+
+    /// <summary>Primary key of the affected entity.</summary>
+    public string EntityId { get; set; } = string.Empty;
+
+    /// <summary>JSON snapshot of changes.</summary>
+    public string? Changes { get; set; }
+
+    /// <summary>Client IP or system identifier.</summary>
+    public string? IpAddress { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Driver.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Driver : BaseEntity
+{
+    public Guid? UserId { get; set; }
+    public string EmployeeNumber { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string FullName => $"{FirstName} {LastName}".Trim();
+    public string Phone { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string Address { get; set; } = string.Empty;
+    public string LicenseNumber { get; set; } = string.Empty;
+    public string LicenseClass { get; set; } = string.Empty;
+    public DateTime LicenseIssueDate { get; set; }
+    public DateTime LicenseExpiry { get; set; }
+    public DriverStatus Status { get; set; } = DriverStatus.Available;
+    public DateTime JoinDate { get; set; } = DateTime.UtcNow;
+    public string EmergencyContact { get; set; } = string.Empty;
+
+    public bool IsLicenseExpired => LicenseExpiry <= DateTime.UtcNow;
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\FuelRecord.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class FuelRecord : BaseEntity
+{
+    public Guid VehicleId { get; set; }
+    public Vehicle? Vehicle { get; set; }
+
+    public Guid? DriverId { get; set; }
+    public Driver? Driver { get; set; }
+
+    /// <summary>Date and time fuel was filled.</summary>
+    public DateTime FuelDate { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Litres added.</summary>
+    public decimal Litres { get; set; }
+
+    /// <summary>Cost per litre.</summary>
+    public decimal CostPerLitre { get; set; }
+
+    /// <summary>Total cost = Litres * CostPerLitre.</summary>
+    public decimal TotalCost => Litres * CostPerLitre;
+
+    /// <summary>Odometer reading at time of refuelling (km).</summary>
+    public decimal OdometerReading { get; set; }
+
+    public FuelType FuelType { get; set; }
+
+    public string? Station { get; set; }
+    public string? Notes { get; set; }
+
+    // Business rule: fuel efficiency (km/L) can be calculated externally when
+    // previous odometer reading is available.
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Incident.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Incident : BaseEntity
+{
+    public Guid VehicleId { get; set; }
+    public Vehicle Vehicle { get; set; } = null!;
+
+    public Guid? DriverId { get; set; }
+    public Driver? Driver { get; set; }
+
+    public Guid? TripId { get; set; }
+    public Trip? Trip { get; set; }
+
+    public DateTime Date { get; set; } = DateTime.UtcNow;
+    public string Location { get; set; } = string.Empty;
+    public IncidentType Type { get; set; } = IncidentType.Accident;
+    public string Description { get; set; } = string.Empty;
+    public IncidentSeverity Severity { get; set; } = IncidentSeverity.Medium;
+    public string? PoliceReportNumber { get; set; }
+    public string? InsuranceClaimNumber { get; set; }
+    public decimal? EstimatedDamage { get; set; }
+    public decimal? ActualRepairCost { get; set; }
+    public IncidentStatus Status { get; set; } = IncidentStatus.Reported;
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Inspection.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Inspection : BaseEntity
+{
+    public Guid VehicleId { get; set; }
+    public Vehicle Vehicle { get; set; } = null!;
+
+    public Guid? DriverId { get; set; }
+    public Driver? Driver { get; set; }
+
+    public Guid? TripId { get; set; }
+    public Trip? Trip { get; set; }
+
+    public InspectionType Type { get; set; } = InspectionType.PreTrip;
+    public DateTime InspectionDate { get; set; } = DateTime.UtcNow;
+    public InspectionResult Result { get; set; } = InspectionResult.Passed;
+    public string? Notes { get; set; }
+
+    public ICollection<InspectionItem> Items { get; set; } = new List<InspectionItem>();
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\InspectionItem.cs
+
+============================================================
+
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class InspectionItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid InspectionId { get; set; }
+    public Inspection Inspection { get; set; } = null!;
+
+    public string ItemName { get; set; } = string.Empty;
+    public InspectionItemStatus Status { get; set; } = InspectionItemStatus.Pass;
+    public string? Notes { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\MaintenanceRecord.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class MaintenanceRecord : BaseEntity
+{
+    public Guid VehicleId { get; set; }
+    public Vehicle? Vehicle { get; set; }
+
+    public MaintenanceType Type { get; set; }
+    public MaintenanceStatus Status { get; set; } = MaintenanceStatus.Scheduled;
+
+    public string Description { get; set; } = string.Empty;
+    public string? ServiceProvider { get; set; }
+
+    public DateTime ScheduledDate { get; set; }
+    public DateTime? CompletedDate { get; set; }
+
+    /// <summary>Odometer reading at which maintenance was performed (km).</summary>
+    public decimal? OdometerReading { get; set; }
+
+    public decimal? Cost { get; set; }
+
+    /// <summary>Next service due at this odometer (km).</summary>
+    public decimal? NextServiceOdometer { get; set; }
+
+    /// <summary>Next service due by this date.</summary>
+    public DateTime? NextServiceDate { get; set; }
+
+    public string? Notes { get; set; }
+
+    // Business rules
+    public bool IsOverdue => Status == MaintenanceStatus.Scheduled && DateTime.UtcNow > ScheduledDate;
+    public bool IsCompleted => Status == MaintenanceStatus.Completed;
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Notification.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Notification : BaseEntity
+{
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+
+    public NotificationType Type { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>Optional deep-link reference (e.g. vehicle id, insurance policy id).</summary>
+    public string? ReferenceId { get; set; }
+    public string? ReferenceType { get; set; }
+
+    public bool IsRead { get; set; } = false;
+    public DateTime? ReadAt { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\RefreshToken.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+
+namespace FleetManagement.Domain.Entities;
+
+public class RefreshToken : BaseEntity
+{
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+
+    public string TokenHash { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+
+    public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
+    public bool IsActive => RevokedAt == null && !IsExpired;
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Role.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Role : BaseEntity
+{
+    public string Name { get; set; } = string.Empty;
+
+    // Navigation property
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Trip.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Trip : BaseEntity
+{
+    public string TripNumber { get; set; } = string.Empty;
+
+    public Guid VehicleId { get; set; }
+    public Vehicle Vehicle { get; set; } = null!;
+
+    public Guid DriverId { get; set; }
+    public Driver Driver { get; set; } = null!;
+
+    public string StartLocation { get; set; } = string.Empty;
+    public string Destination { get; set; } = string.Empty;
+    public DateTime? StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
+    public decimal? StartingMileage { get; set; }
+    public decimal? EndingMileage { get; set; }
+    public decimal? Distance { get; set; }
+    public string Purpose { get; set; } = string.Empty;
+    public TripStatus Status { get; set; } = TripStatus.Scheduled;
+    public string? Notes { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\User.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+
+namespace FleetManagement.Domain.Entities;
+
+public class User : BaseEntity
+{
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+
+    // Navigation properties
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    
+    // One-to-One with Driver (from PDF: User 1--0..1 Driver)
+    public Driver? Driver { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\UserRole.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Entities;
+
+public class UserRole
+{
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+
+    public Guid RoleId { get; set; }
+    public Role? Role { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\Vehicle.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class Vehicle : BaseEntity
+{
+    public string RegistrationNumber { get; set; } = string.Empty;
+    public string? VIN { get; set; }
+    public string EngineNumber { get; set; } = string.Empty;
+    public string Make { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public int Year { get; set; }
+    public VehicleType VehicleType { get; set; }
+    public FuelType FuelType { get; set; }
+    public TransmissionType Transmission { get; set; }
+    public string Color { get; set; } = string.Empty;
+    public decimal Mileage { get; set; }
+    public VehicleStatus Status { get; set; } = VehicleStatus.Available;
+    public DateTime? PurchaseDate { get; set; }
+    public decimal? PurchasePrice { get; set; }
+    public DateTime? RegistrationExpiry { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Entities\VehicleAssignment.cs
+
+============================================================
+
+using FleetManagement.Domain.Common;
+using FleetManagement.Domain.Enums;
+
+namespace FleetManagement.Domain.Entities;
+
+public class VehicleAssignment : BaseEntity
+{
+    public Guid VehicleId { get; set; }
+    public Vehicle Vehicle { get; set; } = null!;
+
+    public Guid DriverId { get; set; }
+    public Driver Driver { get; set; } = null!;
+
+    public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UnassignedAt { get; set; }
+    public AssignmentStatus Status { get; set; } = AssignmentStatus.Active;
+    public Guid? AssignedByUserId { get; set; }
+    public string? Notes { get; set; }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\AssignmentStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum AssignmentStatus
+{
+    Active = 1,
+    Ended = 2
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\AuditAction.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum AuditAction
+{
+    Created,
+    Updated,
+    Deleted,
+    Approved,
+    Rejected,
+    Login,
+    Logout
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\DriverStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum DriverStatus
+{
+    Available = 1,
+    Assigned = 2,
+    OnTrip = 3,
+    Leave = 4,
+    Suspended = 5,
+    Inactive = 6
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\FuelType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum FuelType
+{
+    Petrol = 1,
+    Diesel = 2,
+    Electric = 3,
+    Hybrid = 4,
+    CNG = 5
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\IncidentSeverity.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum IncidentSeverity
+{
+    Low = 1,
+    Medium = 2,
+    High = 3,
+    Critical = 4
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\IncidentStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum IncidentStatus
+{
+    Reported = 1,
+    UnderInvestigation = 2,
+    RepairPending = 3,
+    Resolved = 4,
+    Closed = 5
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\IncidentType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum IncidentType
+{
+    Accident = 1,
+    Breakdown = 2,
+    Damage = 3,
+    Theft = 4,
+    TrafficViolation = 5,
+    Other = 6
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\InspectionItemStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum InspectionItemStatus
+{
+    Pass = 1,
+    Fail = 2,
+    Attention = 3
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\InspectionResult.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum InspectionResult
+{
+    Passed = 1,
+    Failed = 2,
+    NeedsAttention = 3
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\InspectionType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum InspectionType
+{
+    PreTrip = 1,
+    PostTrip = 2,
+    Scheduled = 3
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\MaintenanceStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum MaintenanceStatus
+{
+    Scheduled,
+    InProgress,
+    Completed,
+    Cancelled
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\MaintenanceType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum MaintenanceType
+{
+    Preventive,
+    Corrective,
+    PredictiveMaintenance,
+    RoutineService
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\NotificationType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum NotificationType
+{
+    InsuranceExpiry,
+    MaintenanceDue,
+    DocumentExpiry,
+    LicenseExpiry,
+    TripStarted,
+    TripCompleted,
+    IncidentReported,
+    ExpenseApproved,
+    ExpenseRejected,
+    General
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\TransmissionType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum TransmissionType
+{
+    Automatic = 1,
+    Manual = 2
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\TripStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum TripStatus
+{
+    Scheduled = 1,
+    Assigned = 2,
+    InProgress = 3,
+    Completed = 4,
+    Cancelled = 5
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\VehicleStatus.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum VehicleStatus
+{
+    Available = 1,
+    Assigned = 2,
+    OnTrip = 3,
+    Maintenance = 4,
+    OutOfService = 5,
+    Retired = 6
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Domain\Enums\VehicleType.cs
+
+============================================================
+
+namespace FleetManagement.Domain.Enums;
+
+public enum VehicleType
+{
+    Sedan = 1,
+    SUV = 2,
+    Truck = 3,
+    Van = 4,
+    Bus = 5,
+    Motorcycle = 6,
+    Other = 7
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\AuditLogConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
+{
+    public void Configure(EntityTypeBuilder<AuditLog> builder)
+    {
+        builder.HasKey(a => a.Id);
+
+        builder.Property(a => a.EntityType)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(a => a.EntityId)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(a => a.IpAddress)
+            .HasMaxLength(50);
+
+        builder.HasOne(a => a.User)
+            .WithMany()
+            .HasForeignKey(a => a.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\DriverConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class DriverConfiguration : IEntityTypeConfiguration<Driver>
+{
+    public void Configure(EntityTypeBuilder<Driver> builder)
+    {
+        builder.ToTable("Drivers");
+
+        builder.HasKey(d => d.Id);
+
+        builder.Property(d => d.EmployeeNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(d => d.EmployeeNumber)
+            .IsUnique();
+
+        builder.Property(d => d.FirstName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(d => d.LastName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(d => d.Phone)
+            .IsRequired()
+            .HasMaxLength(30);
+
+        builder.Property(d => d.Email)
+            .HasMaxLength(150);
+
+        builder.Property(d => d.Address)
+            .HasMaxLength(250);
+
+        builder.Property(d => d.LicenseNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(d => d.LicenseNumber)
+            .IsUnique();
+
+        builder.Property(d => d.LicenseClass)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.Property(d => d.EmergencyContact)
+            .HasMaxLength(100);
+
+        builder.HasIndex(d => d.Status);
+        builder.HasIndex(d => d.LicenseExpiry);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\FuelRecordConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class FuelRecordConfiguration : IEntityTypeConfiguration<FuelRecord>
+{
+    public void Configure(EntityTypeBuilder<FuelRecord> builder)
+    {
+        builder.HasKey(f => f.Id);
+
+        builder.Property(f => f.Litres)
+            .HasPrecision(10, 2);
+
+        builder.Property(f => f.CostPerLitre)
+            .HasPrecision(10, 4);
+
+        builder.Property(f => f.OdometerReading)
+            .HasPrecision(12, 2);
+
+        builder.Ignore(f => f.TotalCost);
+
+        builder.HasOne(f => f.Vehicle)
+            .WithMany()
+            .HasForeignKey(f => f.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(f => f.Driver)
+            .WithMany()
+            .HasForeignKey(f => f.DriverId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(f => new { f.VehicleId, f.FuelDate });
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\IncidentConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
+{
+    public void Configure(EntityTypeBuilder<Incident> builder)
+    {
+        builder.ToTable("Incidents");
+
+        builder.HasKey(i => i.Id);
+
+        builder.HasOne(i => i.Vehicle)
+            .WithMany()
+            .HasForeignKey(i => i.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(i => i.Driver)
+            .WithMany()
+            .HasForeignKey(i => i.DriverId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(i => i.Trip)
+            .WithMany()
+            .HasForeignKey(i => i.TripId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Property(i => i.Location)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(i => i.Description)
+            .IsRequired()
+            .HasMaxLength(1000);
+
+        builder.Property(i => i.PoliceReportNumber)
+            .HasMaxLength(100);
+
+        builder.Property(i => i.InsuranceClaimNumber)
+            .HasMaxLength(100);
+
+        builder.Property(i => i.EstimatedDamage)
+            .HasPrecision(18, 2);
+
+        builder.Property(i => i.ActualRepairCost)
+            .HasPrecision(18, 2);
+
+        builder.HasIndex(i => i.Date);
+        builder.HasIndex(i => i.Severity);
+        builder.HasIndex(i => i.Status);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\InspectionConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class InspectionConfiguration : IEntityTypeConfiguration<Inspection>
+{
+    public void Configure(EntityTypeBuilder<Inspection> builder)
+    {
+        builder.ToTable("Inspections");
+
+        builder.HasKey(i => i.Id);
+
+        builder.HasOne(i => i.Vehicle)
+            .WithMany()
+            .HasForeignKey(i => i.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(i => i.Driver)
+            .WithMany()
+            .HasForeignKey(i => i.DriverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(i => i.Trip)
+            .WithMany()
+            .HasForeignKey(i => i.TripId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasMany(i => i.Items)
+            .WithOne(it => it.Inspection)
+            .HasForeignKey(it => it.InspectionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(i => i.Notes)
+            .HasMaxLength(500);
+
+        builder.HasIndex(i => i.Result);
+        builder.HasIndex(i => i.InspectionDate);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\InspectionItemConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class InspectionItemConfiguration : IEntityTypeConfiguration<InspectionItem>
+{
+    public void Configure(EntityTypeBuilder<InspectionItem> builder)
+    {
+        builder.ToTable("InspectionItems");
+
+        builder.HasKey(it => it.Id);
+
+        builder.Property(it => it.ItemName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(it => it.Notes)
+            .HasMaxLength(250);
+
+        builder.HasIndex(it => it.Status);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\MaintenanceRecordConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class MaintenanceRecordConfiguration : IEntityTypeConfiguration<MaintenanceRecord>
+{
+    public void Configure(EntityTypeBuilder<MaintenanceRecord> builder)
+    {
+        builder.HasKey(m => m.Id);
+
+        builder.Property(m => m.Description)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        builder.Property(m => m.ServiceProvider)
+            .HasMaxLength(200);
+
+        builder.Property(m => m.Cost)
+            .HasPrecision(12, 2);
+
+        builder.Property(m => m.OdometerReading)
+            .HasPrecision(12, 2);
+
+        builder.Property(m => m.NextServiceOdometer)
+            .HasPrecision(12, 2);
+
+        builder.Ignore(m => m.IsOverdue);
+        builder.Ignore(m => m.IsCompleted);
+
+        builder.HasOne(m => m.Vehicle)
+            .WithMany()
+            .HasForeignKey(m => m.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(m => new { m.VehicleId, m.ScheduledDate });
+        builder.HasIndex(m => new { m.Status, m.ScheduledDate });
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\NotificationConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
+{
+    public void Configure(EntityTypeBuilder<Notification> builder)
+    {
+        builder.HasKey(n => n.Id);
+
+        builder.Property(n => n.Title)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(n => n.Message)
+            .IsRequired()
+            .HasMaxLength(1000);
+
+        builder.Property(n => n.ReferenceId)
+            .HasMaxLength(100);
+
+        builder.Property(n => n.ReferenceType)
+            .HasMaxLength(100);
+
+        builder.HasOne(n => n.User)
+            .WithMany()
+            .HasForeignKey(n => n.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\RefreshTokenConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> builder)
+    {
+        builder.HasKey(rt => rt.Id);
+
+        builder.Property(rt => rt.TokenHash)
+            .IsRequired();
+
+        builder.HasOne(rt => rt.User)
+            .WithMany(u => u.RefreshTokens)
+            .HasForeignKey(rt => rt.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\RoleConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class RoleConfiguration : IEntityTypeConfiguration<Role>
+{
+    public void Configure(EntityTypeBuilder<Role> builder)
+    {
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.Name)
+            .IsRequired()
+            .HasMaxLength(50);
+            
+        builder.HasIndex(r => r.Name)
+            .IsUnique();
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\TripConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class TripConfiguration : IEntityTypeConfiguration<Trip>
+{
+    public void Configure(EntityTypeBuilder<Trip> builder)
+    {
+        builder.ToTable("Trips");
+
+        builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.TripNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(t => t.TripNumber)
+            .IsUnique();
+
+        builder.HasOne(t => t.Vehicle)
+            .WithMany()
+            .HasForeignKey(t => t.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(t => t.Driver)
+            .WithMany()
+            .HasForeignKey(t => t.DriverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(t => t.StartLocation)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(t => t.Destination)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(t => t.Purpose)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(t => t.StartingMileage)
+            .HasPrecision(18, 2);
+
+        builder.Property(t => t.EndingMileage)
+            .HasPrecision(18, 2);
+
+        builder.Property(t => t.Distance)
+            .HasPrecision(18, 2);
+
+        builder.Property(t => t.Notes)
+            .HasMaxLength(500);
+
+        builder.HasIndex(t => t.Status);
+        builder.HasIndex(t => t.StartTime);
+        builder.HasIndex(t => new { t.VehicleId, t.StartTime });
+        builder.HasIndex(t => new { t.DriverId, t.StartTime });
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\UserConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class UserConfiguration : IEntityTypeConfiguration<User>
+{
+    public void Configure(EntityTypeBuilder<User> builder)
+    {
+        builder.HasKey(u => u.Id);
+
+        builder.Property(u => u.Email)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.HasIndex(u => u.Email)
+            .IsUnique();
+
+        builder.Property(u => u.FirstName)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.Property(u => u.LastName)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.Property(u => u.PasswordHash)
+            .IsRequired();
+
+        // 1-to-0..1 Relationship with Driver
+        builder.HasOne(u => u.Driver)
+            .WithOne()
+            .HasForeignKey<Driver>(d => d.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\UserRoleConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
+{
+    public void Configure(EntityTypeBuilder<UserRole> builder)
+    {
+        builder.HasKey(ur => new { ur.UserId, ur.RoleId });
+
+        builder.HasOne(ur => ur.User)
+            .WithMany(u => u.UserRoles)
+            .HasForeignKey(ur => ur.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(ur => ur.Role)
+            .WithMany(r => r.UserRoles)
+            .HasForeignKey(ur => ur.RoleId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\VehicleAssignmentConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using FleetManagement.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class VehicleAssignmentConfiguration : IEntityTypeConfiguration<VehicleAssignment>
+{
+    public void Configure(EntityTypeBuilder<VehicleAssignment> builder)
+    {
+        builder.ToTable("VehicleAssignments");
+
+        builder.HasKey(va => va.Id);
+
+        builder.HasOne(va => va.Vehicle)
+            .WithMany()
+            .HasForeignKey(va => va.VehicleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(va => va.Driver)
+            .WithMany()
+            .HasForeignKey(va => va.DriverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(va => va.Notes)
+            .HasMaxLength(500);
+
+        builder.HasIndex(va => va.Status);
+        builder.HasIndex(va => va.AssignedAt);
+    }
+}
+
+============================================================
+
+FILE: C:\Users\ADMIN\Desktop\Fleeting_Management_System\backend\src\FleetManagement.Infrastructure\Configurations\VehicleConfiguration.cs
+
+============================================================
+
+using FleetManagement.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace FleetManagement.Infrastructure.Configurations;
+
+public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
+{
+    public void Configure(EntityTypeBuilder<Vehicle> builder)
+    {
+        builder.ToTable("Vehicles");
+
+        builder.HasKey(v => v.Id);
+
+        builder.Property(v => v.RegistrationNumber)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(v => v.RegistrationNumber)
+            .IsUnique();
+
+        builder.Property(v => v.VIN)
+            .HasMaxLength(100);
+
+        builder.HasIndex(v => v.VIN)
+            .IsUnique()
+            .HasFilter("\"VIN\" IS NOT NULL");
+
+        builder.Property(v => v.EngineNumber)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(v => v.Make)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(v => v.Model)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(v => v.Color)
+            .HasMaxLength(50);
+
+        builder.Property(v => v.Mileage)
+            .HasPrecision(18, 2);
+
+        builder.Property(v => v.PurchasePrice)
+            .HasPrecision(18, 2);
+
+        builder.HasIndex(v => v.Status);
+        builder.HasIndex(v => v.RegistrationExpiry);
+    }
+}

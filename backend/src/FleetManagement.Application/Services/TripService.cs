@@ -84,7 +84,7 @@ public class TripService : ITripService
                 Id                  = t.Id,
                 TripNumber          = t.TripNumber,
                 VehicleId           = t.VehicleId,
-                VehicleRegistration = t.Vehicle != null ? t.Vehicle.RegistrationNumber : string.Empty,
+                VehicleRegistrationNumber = t.Vehicle != null ? t.Vehicle.RegistrationNumber : string.Empty,
                 VehicleMakeModel    = t.Vehicle != null ? (t.Vehicle.Make + " " + t.Vehicle.Model) : string.Empty,
                 DriverId            = t.DriverId,
                 DriverName          = t.Driver != null ? (t.Driver.FirstName + " " + t.Driver.LastName) : string.Empty,
@@ -96,7 +96,10 @@ public class TripService : ITripService
                 EndingMileage       = t.EndingMileage,
                 Distance            = t.Distance,
                 Purpose             = t.Purpose,
-                Status              = t.Status,
+                Status              = t.Status == TripStatus.Scheduled ? "Scheduled" :
+                                      t.Status == TripStatus.Assigned ? "Assigned" :
+                                      t.Status == TripStatus.InProgress ? "In Progress" :
+                                      t.Status == TripStatus.Completed ? "Completed" : "Cancelled",
                 Notes               = t.Notes,
                 CreatedAt           = t.CreatedAt,
                 UpdatedAt           = t.UpdatedAt
@@ -208,13 +211,30 @@ public class TripService : ITripService
             throw new InvalidOperationException($"Cannot modify a trip that is already {trip.Status}.");
         }
 
+        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == dto.VehicleId && !v.IsDeleted, cancellationToken)
+            ?? throw new NotFoundException($"Vehicle with ID '{dto.VehicleId}' was not found.");
+        var driver = await _context.Drivers.FirstOrDefaultAsync(d => d.Id == dto.DriverId && !d.IsDeleted, cancellationToken)
+            ?? throw new NotFoundException($"Driver with ID '{dto.DriverId}' was not found.");
+        if (dto.EndTime.HasValue && dto.StartTime.HasValue && dto.EndTime < dto.StartTime)
+            throw new InvalidOperationException("Trip end time must be after its start time.");
+        if (dto.EndingMileage.HasValue && dto.StartingMileage.HasValue && dto.EndingMileage < dto.StartingMileage)
+            throw new InvalidOperationException("Ending mileage cannot be less than starting mileage.");
+
+        trip.TripNumber     = dto.TripNumber.Trim();
+        trip.VehicleId      = dto.VehicleId;
+        trip.Vehicle         = vehicle;
+        trip.DriverId        = dto.DriverId;
+        trip.Driver          = driver;
         trip.StartLocation = dto.StartLocation.Trim();
         trip.Destination   = dto.Destination.Trim();
+        trip.StartTime      = dto.StartTime;
+        trip.EndTime        = dto.EndTime;
+        trip.StartingMileage = dto.StartingMileage;
+        trip.EndingMileage   = dto.EndingMileage;
+        trip.Distance        = dto.Distance;
         trip.Purpose       = dto.Purpose.Trim();
-        if (!string.IsNullOrWhiteSpace(dto.Notes))
-        {
-            trip.Notes = dto.Notes.Trim();
-        }
+        trip.Status         = dto.Status;
+        trip.Notes          = dto.Notes?.Trim();
         trip.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -223,6 +243,21 @@ public class TripService : ITripService
         _dashboardCache.Invalidate();
 
         return MapToDto(trip);
+    }
+
+    public async Task<bool> DeleteTripAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var trip = await _context.Trips.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, cancellationToken);
+        if (trip == null) return false;
+        if (trip.Status is TripStatus.Completed or TripStatus.Cancelled)
+            throw new InvalidOperationException($"Cannot delete a trip that is already {trip.Status}.");
+
+        trip.IsDeleted = true;
+        trip.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        _dashboardCache.Invalidate();
+        _logger.LogWarning("Trip deleted: {Id}", id);
+        return true;
     }
 
     public async Task<TripDto> StartTripAsync(Guid id, StartTripDto dto, CancellationToken cancellationToken = default)
@@ -357,25 +392,21 @@ public class TripService : ITripService
         return MapToDto(trip);
     }
 
-    private async Task RestoreAvailabilityAsync(Vehicle vehicle, Driver driver, CancellationToken cancellationToken)
+    private Task RestoreAvailabilityAsync(Vehicle vehicle, Driver driver, CancellationToken cancellationToken)
     {
-        var vehicleHasActiveAssignment = await _context.VehicleAssignments
-            .AnyAsync(a => a.VehicleId == vehicle.Id && a.Status == AssignmentStatus.Active && !a.IsDeleted, cancellationToken);
-
         if (vehicle.Status == VehicleStatus.OnTrip)
         {
-            vehicle.Status    = vehicleHasActiveAssignment ? VehicleStatus.Assigned : VehicleStatus.Available;
+            vehicle.Status    = VehicleStatus.Available;
             vehicle.UpdatedAt = DateTime.UtcNow;
         }
 
-        var driverHasActiveAssignment = await _context.VehicleAssignments
-            .AnyAsync(a => a.DriverId == driver.Id && a.Status == AssignmentStatus.Active && !a.IsDeleted, cancellationToken);
-
         if (driver.Status == DriverStatus.OnTrip)
         {
-            driver.Status    = driverHasActiveAssignment ? DriverStatus.Assigned : DriverStatus.Available;
+            driver.Status    = DriverStatus.Available;
             driver.UpdatedAt = DateTime.UtcNow;
         }
+
+        return Task.CompletedTask;
     }
 
     private static TripDto MapToDto(Trip t) => new()
@@ -383,7 +414,7 @@ public class TripService : ITripService
         Id                  = t.Id,
         TripNumber          = t.TripNumber,
         VehicleId           = t.VehicleId,
-        VehicleRegistration = t.Vehicle?.RegistrationNumber ?? string.Empty,
+        VehicleRegistrationNumber = t.Vehicle?.RegistrationNumber ?? string.Empty,
         VehicleMakeModel    = t.Vehicle != null ? $"{t.Vehicle.Make} {t.Vehicle.Model}" : string.Empty,
         DriverId            = t.DriverId,
         DriverName          = t.Driver?.FullName ?? string.Empty,
@@ -395,9 +426,18 @@ public class TripService : ITripService
         EndingMileage       = t.EndingMileage,
         Distance            = t.Distance,
         Purpose             = t.Purpose,
-        Status              = t.Status,
+        Status              = GetTripStatusLabel(t.Status),
         Notes               = t.Notes,
         CreatedAt           = t.CreatedAt,
         UpdatedAt           = t.UpdatedAt
+    };
+
+    private static string GetTripStatusLabel(TripStatus status) => status switch
+    {
+        TripStatus.Scheduled => "Scheduled",
+        TripStatus.Assigned => "Assigned",
+        TripStatus.InProgress => "In Progress",
+        TripStatus.Completed => "Completed",
+        _ => "Cancelled"
     };
 }

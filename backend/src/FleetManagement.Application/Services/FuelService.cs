@@ -29,6 +29,8 @@ public class FuelService : IFuelService
     public async Task<IEnumerable<FuelRecordDto>> GetAllAsync()
     {
         var query = _context.FuelRecords
+            .Include(f => f.Vehicle)
+            .Include(f => f.Driver)
             .AsNoTracking()
             .Where(f => !f.IsDeleted);
 
@@ -45,52 +47,24 @@ public class FuelService : IFuelService
             query = query.Where(f => f.DriverId == driver.Id);
         }
 
-        return await query
+        var records = await query
             .OrderByDescending(f => f.FuelDate)
-            .Select(f => new FuelRecordDto
-            {
-                Id                  = f.Id,
-                VehicleId           = f.VehicleId,
-                VehicleRegistration = f.Vehicle != null ? f.Vehicle.RegistrationNumber : string.Empty,
-                DriverId            = f.DriverId,
-                DriverName          = f.Driver != null ? (f.Driver.FirstName + " " + f.Driver.LastName) : null,
-                FuelDate            = f.FuelDate,
-                Litres              = f.Litres,
-                CostPerLitre        = f.CostPerLitre,
-                TotalCost           = f.Litres * f.CostPerLitre,
-                OdometerReading     = f.OdometerReading,
-                FuelType            = f.FuelType,
-                Station             = f.Station,
-                Notes               = f.Notes,
-                CreatedAt           = f.CreatedAt
-            })
             .ToListAsync();
+
+        return records.Select(MapToDto);
     }
 
     public async Task<IEnumerable<FuelRecordDto>> GetByVehicleAsync(Guid vehicleId)
     {
-        return await _context.FuelRecords
+        var records = await _context.FuelRecords
+            .Include(f => f.Vehicle)
+            .Include(f => f.Driver)
             .AsNoTracking()
             .Where(f => f.VehicleId == vehicleId && !f.IsDeleted)
             .OrderByDescending(f => f.FuelDate)
-            .Select(f => new FuelRecordDto
-            {
-                Id                  = f.Id,
-                VehicleId           = f.VehicleId,
-                VehicleRegistration = f.Vehicle != null ? f.Vehicle.RegistrationNumber : string.Empty,
-                DriverId            = f.DriverId,
-                DriverName          = f.Driver != null ? (f.Driver.FirstName + " " + f.Driver.LastName) : null,
-                FuelDate            = f.FuelDate,
-                Litres              = f.Litres,
-                CostPerLitre        = f.CostPerLitre,
-                TotalCost           = f.Litres * f.CostPerLitre,
-                OdometerReading     = f.OdometerReading,
-                FuelType            = f.FuelType,
-                Station             = f.Station,
-                Notes               = f.Notes,
-                CreatedAt           = f.CreatedAt
-            })
             .ToListAsync();
+
+        return records.Select(MapToDto);
     }
 
     public async Task<FuelRecordDto> GetByIdAsync(Guid id)
@@ -163,6 +137,37 @@ public class FuelService : IFuelService
         return await GetByIdAsync(record.Id);
     }
 
+    public async Task<FuelRecordDto> UpdateAsync(Guid id, UpdateFuelRecordRequest request)
+    {
+        var record = await _context.FuelRecords.FirstOrDefaultAsync(f => f.Id == id && !f.IsDeleted)
+            ?? throw new NotFoundException(nameof(FuelRecord), id);
+        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == request.VehicleId && !v.IsDeleted)
+            ?? throw new NotFoundException($"Vehicle with ID '{request.VehicleId}' was not found.");
+        if (request.DriverId.HasValue && !await _context.Drivers.AnyAsync(d => d.Id == request.DriverId.Value && !d.IsDeleted))
+            throw new NotFoundException($"Driver with ID '{request.DriverId}' was not found.");
+        if (request.Litres < 0 || request.CostPerLitre < 0 || request.OdometerReading < 0)
+            throw new InvalidOperationException("Fuel quantities, prices, and odometer readings cannot be negative.");
+
+        record.VehicleId = request.VehicleId;
+        record.DriverId = request.DriverId;
+        record.FuelDate = request.FuelDate;
+        record.Litres = request.Litres;
+        record.CostPerLitre = request.CostPerLitre;
+        record.OdometerReading = request.OdometerReading;
+        record.FuelType = request.FuelType;
+        record.Station = request.Station?.Trim();
+        record.Notes = request.Notes?.Trim();
+        record.UpdatedAt = DateTime.UtcNow;
+        if (request.OdometerReading > vehicle.Mileage)
+        {
+            vehicle.Mileage = request.OdometerReading;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync();
+        _dashboardCache.Invalidate();
+        return await GetByIdAsync(id);
+    }
+
     public async Task DeleteAsync(Guid id)
     {
         var record = await _context.FuelRecords.FirstOrDefaultAsync(f => f.Id == id && !f.IsDeleted)
@@ -179,6 +184,7 @@ public class FuelService : IFuelService
     public async Task<FuelEfficiencyDto> GetEfficiencyAsync(Guid vehicleId)
     {
         var records = await _context.FuelRecords
+            .Include(f => f.Vehicle)
             .AsNoTracking()
             .Where(f => f.VehicleId == vehicleId && !f.IsDeleted)
             .OrderBy(f => f.OdometerReading)
@@ -196,12 +202,11 @@ public class FuelService : IFuelService
 
         return new FuelEfficiencyDto
         {
-            VehicleId               = vehicleId,
-            TotalLitresConsumed     = totalLitres,
-            TotalCost               = totalCost,
-            AverageKmPerLitre       = kmPerLitre,
-            LitresPer100Km          = kmPerLitre > 0 ? Math.Round(100 / kmPerLitre, 2) : 0,
-            TotalFuelRecordsCount   = records.Count
+            VehicleId            = vehicleId,
+            VehicleRegistration  = records.FirstOrDefault()?.Vehicle?.RegistrationNumber,
+            AverageKmPerLitre    = kmPerLitre,
+            TotalFuelCost        = totalCost,
+            TotalLitres          = totalLitres
         };
     }
 
@@ -211,15 +216,14 @@ public class FuelService : IFuelService
         VehicleId           = f.VehicleId,
         VehicleRegistration = f.Vehicle?.RegistrationNumber ?? string.Empty,
         DriverId            = f.DriverId,
-        DriverName          = f.Driver?.FullName,
+        DriverName          = f.Driver != null ? $"{f.Driver.FirstName} {f.Driver.LastName}" : null,
         FuelDate            = f.FuelDate,
         Litres              = f.Litres,
         CostPerLitre        = f.CostPerLitre,
-        TotalCost           = f.Litres * f.CostPerLitre,
+        TotalCost           = f.TotalCost,
         OdometerReading     = f.OdometerReading,
-        FuelType            = f.FuelType,
+        FuelType            = f.FuelType.ToString(),
         Station             = f.Station,
-        Notes               = f.Notes,
-        CreatedAt           = f.CreatedAt
+        Notes               = f.Notes
     };
 }

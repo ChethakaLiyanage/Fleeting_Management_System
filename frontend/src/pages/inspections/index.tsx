@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { inspectionService } from '../../services/inspectionService';
 import { InspectionDto, PagedResult } from '../../types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import '../vehicles/Vehicles.css';
 
 const Inspections = () => {
   const [data, setData] = useState<PagedResult<InspectionDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchInspections();
@@ -29,11 +31,16 @@ const Inspections = () => {
     }
   };
 
+  const deleteInspection = async (inspection: InspectionDto) => {
+    if (!window.confirm(`Delete inspection for ${inspection.vehicleRegistrationNumber}?`)) return;
+    try { await inspectionService.deleteInspection(inspection.id); await fetchInspections(); } catch (err: any) { setError(err.response?.data?.message || 'Could not delete inspection.'); }
+  };
+
   return (
     <div className="vehicles-container fade-in">
       <div className="page-header">
         <h1>Vehicle Inspections</h1>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => navigate('/inspections/new')}>
           <Plus size={18} /> New Inspection
         </button>
       </div>
@@ -57,10 +64,10 @@ const Inspections = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Vehicle ID</th>
+                <th>Vehicle</th>
                 <th>Date</th>
-                <th>Inspector</th>
-                <th>Status</th>
+                <th>Inspector / Driver</th>
+                <th>Type</th>
                 <th>Result</th>
                 <th>Actions</th>
               </tr>
@@ -69,17 +76,18 @@ const Inspections = () => {
               {data?.items && data.items.length > 0 ? (
                 data.items.map(inspection => (
                   <tr key={inspection.id}>
-                    <td><strong>{inspection.vehicleId}</strong></td>
-                    <td>{new Date(inspection.date).toLocaleDateString()}</td>
-                    <td>{inspection.inspectorId || 'N/A'}</td>
-                    <td>{inspection.status}</td>
+                    <td><strong>{inspection.vehicleRegistrationNumber}</strong></td>
+                    <td>{new Date(inspection.inspectionDate).toLocaleDateString()}</td>
+                    <td>{inspection.driverName || 'N/A'}</td>
+                    <td>{inspection.type}</td>
                     <td>
-                      <span className={`status-badge status-${inspection.result}`}>
+                      <span className={`status-badge status-${inspection.result.toLowerCase().replace(/\s+/g, '-')}`}>
                         {inspection.result}
                       </span>
                     </td>
                     <td>
-                      <button className="action-btn">View Details</button>
+                      <Link className="action-btn" to={`/inspections/${inspection.id}/edit`}>Edit</Link>{' '}
+                      <button className="action-btn" onClick={() => deleteInspection(inspection)} title="Delete inspection"><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 ))

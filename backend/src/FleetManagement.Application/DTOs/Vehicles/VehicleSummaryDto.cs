@@ -13,7 +13,6 @@ public class VehicleSummaryDto
     public DateTime? RegistrationExpiry { get; set; }
     public bool IsRegistrationExpiringSoon { get; set; }
     public int TotalTrips { get; set; }
-    public int TotalAssignments { get; set; }
     public int TotalInspections { get; set; }
     public int TotalIncidents { get; set; }
 }

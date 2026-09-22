@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager,Driver")]
+[Authorize(Roles = "Admin,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class IncidentsController : ControllerBase
@@ -49,7 +49,7 @@ public class IncidentsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<IncidentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -63,8 +63,16 @@ public class IncidentsController : ControllerBase
         return Ok(ApiResponse<IncidentDto>.Ok(incident, "Incident updated successfully."));
     }
 
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteIncident(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await _incidentService.DeleteIncidentAsync(id, cancellationToken);
+        return deleted ? NoContent() : NotFound(ApiResponse<bool>.Fail($"Incident with ID '{id}' was not found."));
+    }
+
     [HttpPatch("{id:guid}/status")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<IncidentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateIncidentStatus(Guid id, [FromBody] UpdateIncidentStatusDto dto, CancellationToken cancellationToken)

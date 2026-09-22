@@ -53,7 +53,7 @@ public class DriversController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<DriverDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -64,7 +64,7 @@ public class DriversController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<DriverDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -80,7 +80,7 @@ public class DriversController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateDriver(Guid id, CancellationToken cancellationToken)

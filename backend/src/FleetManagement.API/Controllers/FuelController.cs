@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager,Driver")]
+[Authorize(Roles = "Admin,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class FuelController : ControllerBase
@@ -42,9 +42,14 @@ public class FuelController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(Guid id, UpdateFuelRecordRequest request)
+        => Ok(await _fuelService.UpdateAsync(id, request));
+
     /// <summary>Soft-delete a fuel record.</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin,FleetManager")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         await _fuelService.DeleteAsync(id);

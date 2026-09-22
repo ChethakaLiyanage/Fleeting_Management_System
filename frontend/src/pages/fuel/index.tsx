@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { fuelService } from '../../services/fuelService';
-import { FuelRecordDto, PagedResult } from '../../types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { FuelRecordDto } from '../../types';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import '../vehicles/Vehicles.css';
 
 const Fuel = () => {
-  const [data, setData] = useState<PagedResult<FuelRecordDto> | null>(null);
+  const [data, setData] = useState<FuelRecordDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchFuel();
@@ -16,16 +18,23 @@ const Fuel = () => {
   const fetchFuel = async () => {
     try {
       setLoading(true);
-      const res = await fuelService.getFuelRecords();
-      if (res.success && res.data) {
-        setData(res.data);
-      } else {
-        setError(res.message || 'Failed to load fuel records');
-      }
-    } catch (err) {
-      setError('Network error: Could not reach the server');
+      setError('');
+      const records = await fuelService.getFuelRecords();
+      setData(Array.isArray(records) ? records : []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Network error: Could not reach the server');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteFuel = async (log: FuelRecordDto) => {
+    if (!window.confirm(`Delete fuel log for ${log.vehicleRegistration || 'this vehicle'}?`)) return;
+    try {
+      await fuelService.deleteFuelRecord(log.id);
+      await fetchFuel();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not delete fuel log.');
     }
   };
 
@@ -33,7 +42,7 @@ const Fuel = () => {
     <div className="vehicles-container fade-in">
       <div className="page-header">
         <h1>Fuel Logs</h1>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => navigate('/fuel/new')}>
           <Plus size={18} /> Add Fuel Log
         </button>
       </div>
@@ -57,27 +66,38 @@ const Fuel = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Vehicle ID</th>
+                <th>Vehicle</th>
+                <th>Driver</th>
                 <th>Date</th>
                 <th>Volume (L)</th>
-                <th>Cost</th>
-                <th>Location</th>
+                <th>Cost/L</th>
+                <th>Total Cost</th>
+                <th>Fuel Type</th>
+                <th>Station</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data?.items && data.items.length > 0 ? (
-                data.items.map(log => (
+              {data.length > 0 ? (
+                data.map(log => (
                   <tr key={log.id}>
-                    <td><strong>{log.vehicleId}</strong></td>
-                    <td>{new Date(log.date).toLocaleDateString()}</td>
-                    <td>{log.volume}</td>
-                    <td>${log.cost.toFixed(2)}</td>
-                    <td>{log.location}</td>
+                    <td><strong>{log.vehicleRegistration || 'N/A'}</strong></td>
+                    <td>{log.driverName || 'N/A'}</td>
+                    <td>{new Date(log.fuelDate).toLocaleDateString()}</td>
+                    <td>{log.litres}</td>
+                    <td>${log.costPerLitre.toFixed(2)}</td>
+                    <td><strong>${log.totalCost.toFixed(2)}</strong></td>
+                    <td>{log.fuelType}</td>
+                    <td>{log.station || 'N/A'}</td>
+                    <td>
+                      <Link className="action-btn" to={`/fuel/${log.id}/edit`}>Edit</Link>{' '}
+                      <button className="action-btn" onClick={() => deleteFuel(log)} title="Delete fuel log"><Trash2 size={14} /></button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="empty-state">No fuel logs found.</td>
+                  <td colSpan={9} className="empty-state">No fuel logs found. Click "Add Fuel Log" to create one.</td>
                 </tr>
               )}
             </tbody>

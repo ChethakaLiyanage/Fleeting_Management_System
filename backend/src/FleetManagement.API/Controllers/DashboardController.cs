@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager")]
+[Authorize(Roles = "Admin")]
 [ApiController]
 [Route("api/[controller]")]
 public class DashboardController : ControllerBase

@@ -9,5 +9,6 @@ public interface IIncidentService
     Task<IncidentDto?> GetIncidentByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IncidentDto> CreateIncidentAsync(CreateIncidentDto dto, CancellationToken cancellationToken = default);
     Task<IncidentDto?> UpdateIncidentAsync(Guid id, UpdateIncidentDto dto, CancellationToken cancellationToken = default);
+    Task<bool> DeleteIncidentAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IncidentDto?> UpdateIncidentStatusAsync(Guid id, UpdateIncidentStatusDto dto, CancellationToken cancellationToken = default);
 }

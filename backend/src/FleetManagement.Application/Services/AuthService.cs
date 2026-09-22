@@ -9,11 +9,13 @@ public class AuthService : IAuthService
 {
     private readonly IFleetDbContext _context;
     private readonly ITokenService _tokenService;
+    private readonly IPasswordService _passwordService;
 
-    public AuthService(IFleetDbContext context, ITokenService tokenService)
+    public AuthService(IFleetDbContext context, ITokenService tokenService, IPasswordService passwordService)
     {
         _context = context;
         _tokenService = tokenService;
+        _passwordService = passwordService;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -21,16 +23,16 @@ public class AuthService : IAuthService
         var user = await _context.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Email == request.Email && u.PasswordHash == request.Password); // Simplified for now
+            .FirstOrDefaultAsync(u => u.Email == request.Email);
 
-        if (user == null || !user.IsActive)
+        if (user == null || !user.IsActive || !_passwordService.Verify(user.PasswordHash, request.Password))
             throw new UnauthorizedAccessException("Invalid email or password.");
 
         var roles = user.UserRoles.Select(ur => ur.Role!.Name);
         var accessToken = _tokenService.GenerateAccessToken(user, roles);
         var refreshToken = _tokenService.GenerateRefreshToken();
 
-        user.RefreshTokens.Add(new RefreshToken { TokenHash = refreshToken, ExpiresAt = DateTime.UtcNow.AddDays(7) });
+        _context.RefreshTokens.Add(new RefreshToken { UserId = user.Id, TokenHash = refreshToken, ExpiresAt = DateTime.UtcNow.AddDays(7) });
         await _context.SaveChangesAsync();
 
         return new AuthResponse { AccessToken = accessToken, RefreshToken = refreshToken };

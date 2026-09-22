@@ -1,13 +1,15 @@
 import { api } from './api';
-import { ApiResponse } from '../types';
 
 export interface DashboardSummaryDto {
   totalVehicles: number;
-  activeVehicles: number;
+  availableVehicles: number;
+  vehiclesInUse: number;
   totalDrivers: number;
+  availableDrivers: number;
+  tripsToday: number;
   activeTrips: number;
-  vehiclesInMaintenance: number;
-  openIncidents: number;
+  vehiclesUnderMaintenance: number;
+  openIncidentsCount: number;
 }
 
 export const dashboardService = {

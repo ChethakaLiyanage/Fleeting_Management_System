@@ -150,6 +150,33 @@ public class MaintenanceService : IMaintenanceService
         return await GetByIdAsync(record.Id);
     }
 
+    public async Task<MaintenanceRecordDto> UpdateAsync(Guid id, UpdateMaintenanceRequest request)
+    {
+        var record = await _context.MaintenanceRecords.FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted)
+            ?? throw new NotFoundException(nameof(MaintenanceRecord), id);
+        if (!await _context.Vehicles.AnyAsync(v => v.Id == request.VehicleId && !v.IsDeleted))
+            throw new NotFoundException($"Vehicle with ID '{request.VehicleId}' was not found.");
+        if (request.Cost < 0 || request.OdometerReading < 0 || request.NextServiceOdometer < 0)
+            throw new InvalidOperationException("Maintenance costs and odometer readings cannot be negative.");
+
+        record.VehicleId = request.VehicleId;
+        record.Type = request.Type;
+        record.Description = request.Description.Trim();
+        record.ServiceProvider = request.ServiceProvider?.Trim();
+        record.ScheduledDate = request.ScheduledDate;
+        record.CompletedDate = request.CompletedDate;
+        record.OdometerReading = request.OdometerReading;
+        record.Cost = request.Cost;
+        record.NextServiceOdometer = request.NextServiceOdometer;
+        record.NextServiceDate = request.NextServiceDate;
+        record.Status = request.Status;
+        record.Notes = request.Notes?.Trim();
+        record.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        _dashboardCache.Invalidate();
+        return await GetByIdAsync(id);
+    }
+
     public async Task<MaintenanceRecordDto> UpdateStatusAsync(Guid id, UpdateMaintenanceStatusRequest request)
     {
         var record = await _context.MaintenanceRecords.FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted)

@@ -28,5 +28,11 @@ public class CreateDriverValidator : AbstractValidator<CreateDriverDto>
 
         RuleFor(x => x.EmployeeNumber)
             .NotEmpty().WithMessage("Employee number is required.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().EmailAddress().WithMessage("A valid email is required.");
+
+        RuleFor(x => x.InitialPassword)
+            .NotEmpty().MinimumLength(8).WithMessage("An initial password of at least 8 characters is required.");
     }
 }

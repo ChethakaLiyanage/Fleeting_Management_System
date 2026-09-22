@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
-[Authorize(Roles = "Admin,FleetManager,Driver")]
+[Authorize(Roles = "Admin,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class InspectionsController : ControllerBase
@@ -54,5 +54,25 @@ public class InspectionsController : ControllerBase
     {
         var inspection = await _inspectionService.CreateInspectionAsync(dto, cancellationToken);
         return CreatedAtAction(nameof(GetInspectionById), new { id = inspection.Id }, ApiResponse<InspectionDto>.Ok(inspection, "Inspection recorded successfully."));
+    }
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateInspection(Guid id, [FromBody] UpdateInspectionDto dto, CancellationToken cancellationToken)
+    {
+        var inspection = await _inspectionService.UpdateInspectionAsync(id, dto, cancellationToken);
+        if (inspection == null)
+        {
+            return NotFound(ApiResponse<InspectionDto>.Fail($"Inspection with ID '{id}' was not found."));
+        }
+        return Ok(ApiResponse<InspectionDto>.Ok(inspection, "Inspection updated successfully."));
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteInspection(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await _inspectionService.DeleteInspectionAsync(id, cancellationToken);
+        return deleted ? NoContent() : NotFound(ApiResponse<bool>.Fail($"Inspection with ID '{id}' was not found."));
     }
 }

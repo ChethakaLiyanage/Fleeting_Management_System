@@ -1,5 +1,6 @@
 using FleetManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace FleetManagement.Application.Interfaces;
 
@@ -7,7 +8,6 @@ public interface IFleetDbContext
 {
     DbSet<Vehicle> Vehicles { get; }
     DbSet<Driver> Drivers { get; }
-    DbSet<VehicleAssignment> VehicleAssignments { get; }
     DbSet<Trip> Trips { get; }
     DbSet<Inspection> Inspections { get; }
     DbSet<InspectionItem> InspectionItems { get; }
@@ -23,5 +23,6 @@ public interface IFleetDbContext
     // DbSet<Document> Documents { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<AuditLog> AuditLogs { get; }
+    DatabaseFacade Database { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

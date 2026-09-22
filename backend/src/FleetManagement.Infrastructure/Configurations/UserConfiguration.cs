@@ -28,10 +28,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordHash)
             .IsRequired();
 
-        // 1-to-0..1 Relationship with Driver
+        // A driver must always have exactly one linked user.
         builder.HasOne(u => u.Driver)
-            .WithOne()
+            .WithOne(d => d.User)
             .HasForeignKey<Driver>(d => d.UserId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

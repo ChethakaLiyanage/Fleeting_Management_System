@@ -12,6 +12,9 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
 
         builder.HasKey(d => d.Id);
 
+        builder.Property(d => d.UserId).IsRequired();
+        builder.HasIndex(d => d.UserId).IsUnique();
+
         builder.Property(d => d.EmployeeNumber)
             .IsRequired()
             .HasMaxLength(50);

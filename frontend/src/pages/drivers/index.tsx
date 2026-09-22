@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { driverService } from '../../services/driverService';
 import { DriverDto, PagedResult } from '../../types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Trash2 } from 'lucide-react';
 import '../vehicles/Vehicles.css'; // Re-use table styles
 
 const Drivers = () => {
   const [data, setData] = useState<PagedResult<DriverDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDrivers();
@@ -29,11 +31,16 @@ const Drivers = () => {
     }
   };
 
+  const deleteDriver = async (driver: DriverDto) => {
+    if (!window.confirm(`Deactivate driver ${driver.fullName} (${driver.employeeNumber})?`)) return;
+    try { await driverService.deleteDriver(driver.id); await fetchDrivers(); } catch (err: any) { setError(err.response?.data?.message || 'Could not deactivate driver.'); }
+  };
+
   return (
     <div className="vehicles-container fade-in">
       <div className="page-header">
         <h1>Drivers Management</h1>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => navigate('/drivers/new')}>
           <Plus size={18} /> Add Driver
         </button>
       </div>
@@ -85,7 +92,8 @@ const Drivers = () => {
                     </td>
                     <td>{driver.phone}</td>
                     <td>
-                      <button className="action-btn">View</button>
+                      <Link className="action-btn" to={`/drivers/${driver.id}/edit`}>Edit</Link>{' '}
+                      <button className="action-btn" onClick={() => deleteDriver(driver)} title="Deactivate driver"><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 ))

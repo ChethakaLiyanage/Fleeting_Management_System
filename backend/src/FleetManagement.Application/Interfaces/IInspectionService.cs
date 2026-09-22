@@ -9,4 +9,6 @@ public interface IInspectionService
     Task<InspectionDto?> GetInspectionByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<List<InspectionDto>> GetFailedInspectionsAsync(CancellationToken cancellationToken = default);
     Task<InspectionDto> CreateInspectionAsync(CreateInspectionDto dto, CancellationToken cancellationToken = default);
+    Task<InspectionDto?> UpdateInspectionAsync(Guid id, UpdateInspectionDto dto, CancellationToken cancellationToken = default);
+    Task<bool> DeleteInspectionAsync(Guid id, CancellationToken cancellationToken = default);
 }

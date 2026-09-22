@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { vehicleService } from '../../services/vehicleService';
 import { VehicleDto, PagedResult } from '../../types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Trash2 } from 'lucide-react';
 import './Vehicles.css';
 
 const Vehicles = () => {
   const [data, setData] = useState<PagedResult<VehicleDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchVehicles();
@@ -29,11 +31,16 @@ const Vehicles = () => {
     }
   };
 
+  const deleteVehicle = async (vehicle: VehicleDto) => {
+    if (!window.confirm(`Archive vehicle ${vehicle.registrationNumber}?`)) return;
+    try { await vehicleService.deleteVehicle(vehicle.id); await fetchVehicles(); } catch (err: any) { setError(err.response?.data?.message || 'Could not archive vehicle.'); }
+  };
+
   return (
     <div className="vehicles-container fade-in">
       <div className="page-header">
         <h1>Vehicles Management</h1>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => navigate('/vehicles/new')}>
           <Plus size={18} /> Add Vehicle
         </button>
       </div>
@@ -82,7 +89,8 @@ const Vehicles = () => {
                     </td>
                     <td>{vehicle.mileage.toLocaleString()} km</td>
                     <td>
-                      <button className="action-btn">Edit</button>
+                      <Link className="action-btn" to={`/vehicles/${vehicle.id}/edit`}>Edit</Link>{' '}
+                      <button className="action-btn" onClick={() => deleteVehicle(vehicle)} title="Archive vehicle"><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 ))

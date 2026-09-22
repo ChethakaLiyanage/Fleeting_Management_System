@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Note: Ensure this matches the port your .NET backend is running on (e.g., 5241 or 7198)
-const API_BASE_URL = 'http://localhost:5241/api';
+// Read from Vite environment variable or fall back to default localhost:5241
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5241/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,7 +13,10 @@ export const api = axios.create({
 // Request Interceptor
 api.interceptors.request.use(
   (config) => {
-    // We can add auth tokens here later
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -27,7 +30,14 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Global error handling
+    if (error.response && error.response.status === 401) {
+      // Clear token and redirect to login if unauthorized
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
     return Promise.reject(error);
   }
 );

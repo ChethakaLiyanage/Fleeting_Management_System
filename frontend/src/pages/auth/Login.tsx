@@ -1,20 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car } from 'lucide-react';
+import { Car, AlertCircle } from 'lucide-react';
+import { authService } from '../../services/authService';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('admin@fleetos.com');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate login delay
-    setTimeout(() => {
-      setLoading(false);
+    setError(null);
+    try {
+      await authService.login({ email, password });
       navigate('/dashboard');
-    }, 1500);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.response?.data || err.message || 'Login failed. Please verify credentials.';
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,23 +36,55 @@ const Login = () => {
           <h2>Welcome to FleetOS</h2>
           <p>Please sign in to your account</p>
         </div>
+
+        {error && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #ef4444',
+            color: '#ef4444',
+            padding: '10px 14px',
+            borderRadius: '6px',
+            marginBottom: '16px',
+            fontSize: '0.875rem'
+          }}>
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        )}
         
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-group">
             <label>Email Address</label>
-            <input type="email" placeholder="admin@fleetos.com" required className="form-control" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@fleetos.com"
+              required
+              className="form-control"
+            />
           </div>
           
           <div className="form-group">
             <label>Password</label>
-            <input type="password" placeholder="••••••••" required className="form-control" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              className="form-control"
+            />
           </div>
           
           <div className="form-options">
             <label className="checkbox-container">
-              <input type="checkbox" /> Remember me
+              <input type="checkbox" defaultChecked /> Remember me
             </label>
-            <a href="#" className="forgot-password">Forgot password?</a>
+            <button type="button" className="forgot-password">Forgot password?</button>
           </div>
           
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>

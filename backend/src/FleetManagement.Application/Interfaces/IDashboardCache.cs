@@ -7,5 +7,6 @@ namespace FleetManagement.Application.Interfaces;
 /// </summary>
 public interface IDashboardCache
 {
+    public const string CacheKey = "dashboard:summary";
     void Invalidate();
 }

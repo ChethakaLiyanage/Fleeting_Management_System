@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { incidentService } from '../../services/incidentService';
 import { IncidentDto, PagedResult } from '../../types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import '../vehicles/Vehicles.css';
 
 const Incidents = () => {
   const [data, setData] = useState<PagedResult<IncidentDto> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchIncidents();
@@ -29,11 +31,16 @@ const Incidents = () => {
     }
   };
 
+  const deleteIncident = async (incident: IncidentDto) => {
+    if (!window.confirm(`Delete incident for ${incident.vehicleRegistration || 'this vehicle'}?`)) return;
+    try { await incidentService.deleteIncident(incident.id); await fetchIncidents(); } catch (err: any) { setError(err.response?.data?.message || 'Could not delete incident.'); }
+  };
+
   return (
     <div className="vehicles-container fade-in">
       <div className="page-header">
         <h1>Incident Reports</h1>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => navigate('/incidents/new')}>
           <Plus size={18} /> Report Incident
         </button>
       </div>
@@ -57,7 +64,7 @@ const Incidents = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Vehicle ID</th>
+                <th>Vehicle</th>
                 <th>Date</th>
                 <th>Description</th>
                 <th>Severity</th>
@@ -69,7 +76,7 @@ const Incidents = () => {
               {data?.items && data.items.length > 0 ? (
                 data.items.map(incident => (
                   <tr key={incident.id}>
-                    <td><strong>{incident.vehicleId}</strong></td>
+                    <td><strong>{incident.vehicleRegistration || 'N/A'}</strong></td>
                     <td>{new Date(incident.date).toLocaleDateString()}</td>
                     <td>{incident.description}</td>
                     <td>
@@ -79,7 +86,8 @@ const Incidents = () => {
                     </td>
                     <td>{incident.status}</td>
                     <td>
-                      <button className="action-btn">View</button>
+                      <Link className="action-btn" to={`/incidents/${incident.id}/edit`}>Edit</Link>{' '}
+                      <button className="action-btn" onClick={() => deleteIncident(incident)} title="Delete incident"><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 ))

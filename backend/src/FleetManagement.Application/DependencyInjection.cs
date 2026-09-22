@@ -18,7 +18,6 @@ public static class DependencyInjection
         // Domain & Application Services
         services.AddScoped<IVehicleService, VehicleService>();
         services.AddScoped<IDriverService, DriverService>();
-        services.AddScoped<IAssignmentService, AssignmentService>();
         services.AddScoped<ITripService, TripService>();
         services.AddScoped<IInspectionService, InspectionService>();
         services.AddScoped<IIncidentService, IncidentService>();
@@ -31,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IPasswordService, PasswordService>();
 
         return services;
     }

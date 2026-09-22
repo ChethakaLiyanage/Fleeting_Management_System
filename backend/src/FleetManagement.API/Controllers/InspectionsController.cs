@@ -1,10 +1,12 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Inspections;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize(Roles = "Admin,FleetManager,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class InspectionsController : ControllerBase
@@ -50,14 +52,7 @@ public class InspectionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateInspection([FromBody] CreateInspectionDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var inspection = await _inspectionService.CreateInspectionAsync(dto, cancellationToken);
-            return CreatedAtAction(nameof(GetInspectionById), new { id = inspection.Id }, ApiResponse<InspectionDto>.Ok(inspection, "Inspection recorded successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<InspectionDto>.Fail(ex.Message));
-        }
+        var inspection = await _inspectionService.CreateInspectionAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetInspectionById), new { id = inspection.Id }, ApiResponse<InspectionDto>.Ok(inspection, "Inspection recorded successfully."));
     }
 }

@@ -1,19 +1,31 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Inspections;
+using FleetManagement.Application.Exceptions;
 using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Entities;
 using FleetManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FleetManagement.Application.Services;
 
 public class InspectionService : IInspectionService
 {
     private readonly IFleetDbContext _context;
+    private readonly ICurrentUser _currentUser;
+    private readonly IDashboardCache _dashboardCache;
+    private readonly ILogger<InspectionService> _logger;
 
-    public InspectionService(IFleetDbContext context)
+    public InspectionService(
+        IFleetDbContext context,
+        ICurrentUser currentUser,
+        IDashboardCache dashboardCache,
+        ILogger<InspectionService> logger)
     {
-        _context = context;
+        _context        = context;
+        _currentUser    = currentUser;
+        _dashboardCache = dashboardCache;
+        _logger         = logger;
     }
 
     public async Task<PagedResult<InspectionDto>> GetInspectionsAsync(InspectionFilterParams filterParams, CancellationToken cancellationToken = default)
@@ -26,14 +38,26 @@ public class InspectionService : IInspectionService
             .AsNoTracking()
             .Where(i => !i.IsDeleted);
 
+        if (_currentUser.IsInRole("Driver"))
+        {
+            var driver = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+
+            if (driver == null)
+            {
+                return new PagedResult<InspectionDto>(new List<InspectionDto>(), 0, filterParams.PageNumber, filterParams.PageSize);
+            }
+
+            query = query.Where(i => i.DriverId == driver.Id);
+        }
+        else if (filterParams.DriverId.HasValue)
+        {
+            query = query.Where(i => i.DriverId == filterParams.DriverId.Value);
+        }
+
         if (filterParams.VehicleId.HasValue)
         {
             query = query.Where(i => i.VehicleId == filterParams.VehicleId.Value);
-        }
-
-        if (filterParams.DriverId.HasValue)
-        {
-            query = query.Where(i => i.DriverId == filterParams.DriverId.Value);
         }
 
         if (filterParams.Type.HasValue)
@@ -68,7 +92,20 @@ public class InspectionService : IInspectionService
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted, cancellationToken);
 
-        return inspection == null ? null : MapToDto(inspection);
+        if (inspection == null) return null;
+
+        if (_currentUser.IsInRole("Driver"))
+        {
+            var driver = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+
+            if (inspection.DriverId != driver?.Id)
+            {
+                throw new ForbiddenException("You can only access your own inspections.");
+            }
+        }
+
+        return MapToDto(inspection);
     }
 
     public async Task<List<InspectionDto>> GetFailedInspectionsAsync(CancellationToken cancellationToken = default)
@@ -89,94 +126,83 @@ public class InspectionService : IInspectionService
     {
         var vehicle = await _context.Vehicles
             .FirstOrDefaultAsync(v => v.Id == dto.VehicleId && !v.IsDeleted, cancellationToken)
-            ?? throw new InvalidOperationException($"Vehicle with ID '{dto.VehicleId}' was not found.");
+            ?? throw new NotFoundException($"Vehicle with ID '{dto.VehicleId}' was not found.");
 
-        Driver? driver = null;
-        if (dto.DriverId.HasValue)
+        Guid? driverId = dto.DriverId;
+        if (_currentUser.IsInRole("Driver"))
         {
-            driver = await _context.Drivers
-                .FirstOrDefaultAsync(d => d.Id == dto.DriverId.Value && !d.IsDeleted, cancellationToken);
+            var driverRecord = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+            if (driverRecord != null)
+            {
+                driverId = driverRecord.Id;
+            }
         }
 
-        Trip? trip = null;
-        if (dto.TripId.HasValue)
-        {
-            trip = await _context.Trips
-                .FirstOrDefaultAsync(t => t.Id == dto.TripId.Value && !t.IsDeleted, cancellationToken);
-        }
+        var inspectionNumber = $"INS-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
+
+        var overallResult = dto.Items.Any(item => item.Status == InspectionItemStatus.Fail)
+            ? InspectionResult.Failed
+            : InspectionResult.Passed;
 
         var inspection = new Inspection
         {
-            VehicleId = dto.VehicleId,
-            Vehicle = vehicle,
-            DriverId = dto.DriverId,
-            Driver = driver,
-            TripId = dto.TripId,
-            Trip = trip,
-            Type = dto.Type,
-            InspectionDate = dto.InspectionDate ?? DateTime.UtcNow,
-            Notes = dto.Notes?.Trim(),
-            CreatedAt = DateTime.UtcNow
+            InspectionNumber = inspectionNumber,
+            VehicleId        = dto.VehicleId,
+            Vehicle          = vehicle,
+            DriverId         = driverId,
+            TripId           = dto.TripId,
+            InspectionDate   = dto.InspectionDate,
+            Type             = dto.Type,
+            Result           = overallResult,
+            Notes            = dto.Notes?.Trim(),
+            CreatedAt        = DateTime.UtcNow
         };
-
-        var hasFailures = false;
-        var hasAttention = false;
 
         foreach (var itemDto in dto.Items)
         {
-            if (itemDto.Status == InspectionItemStatus.Fail) hasFailures = true;
-            if (itemDto.Status == InspectionItemStatus.Attention) hasAttention = true;
-
             inspection.Items.Add(new InspectionItem
             {
-                ItemName = itemDto.ItemName.Trim(),
-                Status = itemDto.Status,
-                Notes = itemDto.Notes?.Trim()
+                ItemName  = itemDto.ItemName.Trim(),
+                Category  = itemDto.Category.Trim(),
+                Status    = itemDto.Status,
+                Comments  = itemDto.Comments?.Trim(),
+                CreatedAt = DateTime.UtcNow
             });
-        }
-
-        if (hasFailures)
-        {
-            inspection.Result = InspectionResult.Failed;
-            vehicle.Status = VehicleStatus.Maintenance;
-            vehicle.UpdatedAt = DateTime.UtcNow;
-        }
-        else if (hasAttention)
-        {
-            inspection.Result = InspectionResult.NeedsAttention;
-        }
-        else
-        {
-            inspection.Result = InspectionResult.Passed;
         }
 
         _context.Inspections.Add(inspection);
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Inspection recorded: {Number} Result: {Result}", inspection.InspectionNumber, overallResult);
+        _dashboardCache.Invalidate();
 
         return MapToDto(inspection);
     }
 
     private static InspectionDto MapToDto(Inspection i) => new()
     {
-        Id = i.Id,
-        VehicleId = i.VehicleId,
+        Id                  = i.Id,
+        InspectionNumber    = i.InspectionNumber,
+        VehicleId           = i.VehicleId,
         VehicleRegistration = i.Vehicle?.RegistrationNumber ?? string.Empty,
-        VehicleMakeModel = i.Vehicle != null ? $"{i.Vehicle.Make} {i.Vehicle.Model}" : string.Empty,
-        DriverId = i.DriverId,
-        DriverName = i.Driver?.FullName,
-        TripId = i.TripId,
-        TripNumber = i.Trip?.TripNumber,
-        Type = i.Type,
-        InspectionDate = i.InspectionDate,
-        Result = i.Result,
-        Notes = i.Notes,
-        CreatedAt = i.CreatedAt,
-        Items = i.Items.Select(it => new InspectionItemDto
+        DriverId            = i.DriverId,
+        DriverName          = i.Driver?.FullName,
+        TripId              = i.TripId,
+        TripNumber          = i.Trip?.TripNumber,
+        InspectionDate      = i.InspectionDate,
+        Type                = i.Type,
+        Result              = i.Result,
+        Notes               = i.Notes,
+        CreatedAt           = i.CreatedAt,
+        Items               = i.Items.Select(item => new InspectionItemDto
         {
-            Id = it.Id,
-            ItemName = it.ItemName,
-            Status = it.Status,
-            Notes = it.Notes
+            Id        = item.Id,
+            ItemName  = item.ItemName,
+            Category  = item.Category,
+            Status    = item.Status,
+            Comments  = item.Comments,
+            CreatedAt = item.CreatedAt
         }).ToList()
     };
 }

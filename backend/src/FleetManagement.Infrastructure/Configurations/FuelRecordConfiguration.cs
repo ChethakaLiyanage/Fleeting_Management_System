@@ -30,5 +30,7 @@ public class FuelRecordConfiguration : IEntityTypeConfiguration<FuelRecord>
             .WithMany()
             .HasForeignKey(f => f.DriverId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(f => new { f.VehicleId, f.FuelDate });
     }
 }

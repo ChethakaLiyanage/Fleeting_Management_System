@@ -1,9 +1,11 @@
 using FleetManagement.Application.DTOs.Maintenance;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize(Roles = "Admin,FleetManager")]
 [ApiController]
 [Route("api/[controller]")]
 public class MaintenanceController : ControllerBase

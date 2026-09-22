@@ -1,38 +1,59 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Incidents;
+using FleetManagement.Application.Exceptions;
 using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Entities;
 using FleetManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FleetManagement.Application.Services;
 
 public class IncidentService : IIncidentService
 {
     private readonly IFleetDbContext _context;
+    private readonly ICurrentUser _currentUser;
+    private readonly IDashboardCache _dashboardCache;
+    private readonly ILogger<IncidentService> _logger;
 
-    public IncidentService(IFleetDbContext context)
+    public IncidentService(
+        IFleetDbContext context,
+        ICurrentUser currentUser,
+        IDashboardCache dashboardCache,
+        ILogger<IncidentService> logger)
     {
-        _context = context;
+        _context        = context;
+        _currentUser    = currentUser;
+        _dashboardCache = dashboardCache;
+        _logger         = logger;
     }
 
     public async Task<PagedResult<IncidentDto>> GetIncidentsAsync(IncidentFilterParams filterParams, CancellationToken cancellationToken = default)
     {
         var query = _context.Incidents
-            .Include(i => i.Vehicle)
-            .Include(i => i.Driver)
-            .Include(i => i.Trip)
             .AsNoTracking()
             .Where(i => !i.IsDeleted);
+
+        if (_currentUser.IsInRole("Driver"))
+        {
+            var driver = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+
+            if (driver == null)
+            {
+                return new PagedResult<IncidentDto>(new List<IncidentDto>(), 0, filterParams.PageNumber, filterParams.PageSize);
+            }
+
+            query = query.Where(i => i.DriverId == driver.Id);
+        }
+        else if (filterParams.DriverId.HasValue)
+        {
+            query = query.Where(i => i.DriverId == filterParams.DriverId.Value);
+        }
 
         if (filterParams.VehicleId.HasValue)
         {
             query = query.Where(i => i.VehicleId == filterParams.VehicleId.Value);
-        }
-
-        if (filterParams.DriverId.HasValue)
-        {
-            query = query.Where(i => i.DriverId == filterParams.DriverId.Value);
         }
 
         if (filterParams.Type.HasValue)
@@ -56,7 +77,28 @@ public class IncidentService : IIncidentService
             .OrderByDescending(i => i.Date)
             .Skip((filterParams.PageNumber - 1) * filterParams.PageSize)
             .Take(filterParams.PageSize)
-            .Select(i => MapToDto(i))
+            .Select(i => new IncidentDto
+            {
+                Id                  = i.Id,
+                IncidentNumber      = i.IncidentNumber,
+                VehicleId           = i.VehicleId,
+                VehicleRegistration = i.Vehicle != null ? i.Vehicle.RegistrationNumber : string.Empty,
+                DriverId            = i.DriverId,
+                DriverName          = i.Driver != null ? (i.Driver.FirstName + " " + i.Driver.LastName) : null,
+                TripId              = i.TripId,
+                TripNumber          = i.Trip != null ? i.Trip.TripNumber : null,
+                Date                = i.Date,
+                Type                = i.Type,
+                Severity            = i.Severity,
+                Description         = i.Description,
+                Location            = i.Location,
+                EstimatedCost       = i.EstimatedCost,
+                ActualCost          = i.ActualCost,
+                PoliceReportNumber  = i.PoliceReportNumber,
+                Status              = i.Status,
+                CreatedAt           = i.CreatedAt,
+                UpdatedAt           = i.UpdatedAt
+            })
             .ToListAsync(cancellationToken);
 
         return new PagedResult<IncidentDto>(items, totalCount, filterParams.PageNumber, filterParams.PageSize);
@@ -71,58 +113,64 @@ public class IncidentService : IIncidentService
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted, cancellationToken);
 
-        return incident == null ? null : MapToDto(incident);
+        if (incident == null) return null;
+
+        if (_currentUser.IsInRole("Driver"))
+        {
+            var driver = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+
+            if (incident.DriverId != driver?.Id)
+            {
+                throw new ForbiddenException("You can only access your own incidents.");
+            }
+        }
+
+        return MapToDto(incident);
     }
 
     public async Task<IncidentDto> CreateIncidentAsync(CreateIncidentDto dto, CancellationToken cancellationToken = default)
     {
         var vehicle = await _context.Vehicles
             .FirstOrDefaultAsync(v => v.Id == dto.VehicleId && !v.IsDeleted, cancellationToken)
-            ?? throw new InvalidOperationException($"Vehicle with ID '{dto.VehicleId}' was not found.");
+            ?? throw new NotFoundException($"Vehicle with ID '{dto.VehicleId}' was not found.");
 
-        Driver? driver = null;
-        if (dto.DriverId.HasValue)
+        Guid? driverId = dto.DriverId;
+        if (_currentUser.IsInRole("Driver"))
         {
-            driver = await _context.Drivers
-                .FirstOrDefaultAsync(d => d.Id == dto.DriverId.Value && !d.IsDeleted, cancellationToken);
+            var driverRecord = await _context.Drivers
+                .FirstOrDefaultAsync(d => d.UserId == _currentUser.UserId, cancellationToken);
+            if (driverRecord != null)
+            {
+                driverId = driverRecord.Id;
+            }
         }
 
-        Trip? trip = null;
-        if (dto.TripId.HasValue)
-        {
-            trip = await _context.Trips
-                .FirstOrDefaultAsync(t => t.Id == dto.TripId.Value && !t.IsDeleted, cancellationToken);
-        }
+        var incidentNumber = $"INC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
 
         var incident = new Incident
         {
-            VehicleId = dto.VehicleId,
-            Vehicle = vehicle,
-            DriverId = dto.DriverId,
-            Driver = driver,
-            TripId = dto.TripId,
-            Trip = trip,
-            Date = dto.Date ?? DateTime.UtcNow,
-            Location = dto.Location.Trim(),
-            Type = dto.Type,
-            Description = dto.Description.Trim(),
-            Severity = dto.Severity,
+            IncidentNumber     = incidentNumber,
+            VehicleId          = dto.VehicleId,
+            Vehicle            = vehicle,
+            DriverId           = driverId,
+            TripId             = dto.TripId,
+            Date               = dto.Date,
+            Type               = dto.Type,
+            Severity           = dto.Severity,
+            Description        = dto.Description.Trim(),
+            Location           = dto.Location.Trim(),
+            EstimatedCost      = dto.EstimatedCost,
             PoliceReportNumber = dto.PoliceReportNumber?.Trim(),
-            InsuranceClaimNumber = dto.InsuranceClaimNumber?.Trim(),
-            EstimatedDamage = dto.EstimatedDamage,
-            ActualRepairCost = dto.ActualRepairCost,
-            Status = IncidentStatus.Reported,
-            CreatedAt = DateTime.UtcNow
+            Status             = IncidentStatus.Reported,
+            CreatedAt          = DateTime.UtcNow
         };
-
-        if (dto.Severity == IncidentSeverity.Critical || dto.Type is IncidentType.Accident or IncidentType.Breakdown)
-        {
-            vehicle.Status = VehicleStatus.OutOfService;
-            vehicle.UpdatedAt = DateTime.UtcNow;
-        }
 
         _context.Incidents.Add(incident);
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Incident reported: {Number} for vehicle {VehicleId}", incident.IncidentNumber, dto.VehicleId);
+        _dashboardCache.Invalidate();
 
         return MapToDto(incident);
     }
@@ -137,19 +185,19 @@ public class IncidentService : IIncidentService
 
         if (incident == null) return null;
 
-        if (dto.Date.HasValue) incident.Date = dto.Date.Value;
-        incident.Location = dto.Location.Trim();
-        incident.Type = dto.Type;
-        incident.Description = dto.Description.Trim();
-        incident.Severity = dto.Severity;
+        incident.Date               = dto.Date;
+        incident.Type               = dto.Type;
+        incident.Severity           = dto.Severity;
+        incident.Description        = dto.Description.Trim();
+        incident.Location           = dto.Location.Trim();
+        incident.EstimatedCost      = dto.EstimatedCost;
         incident.PoliceReportNumber = dto.PoliceReportNumber?.Trim();
-        incident.InsuranceClaimNumber = dto.InsuranceClaimNumber?.Trim();
-        incident.EstimatedDamage = dto.EstimatedDamage;
-        incident.ActualRepairCost = dto.ActualRepairCost;
-        incident.Status = dto.Status;
-        incident.UpdatedAt = DateTime.UtcNow;
+        incident.UpdatedAt          = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Incident updated: {Number}", incident.IncidentNumber);
+        _dashboardCache.Invalidate();
 
         return MapToDto(incident);
     }
@@ -164,48 +212,42 @@ public class IncidentService : IIncidentService
 
         if (incident == null) return null;
 
-        incident.Status = dto.Status;
-        if (dto.ActualRepairCost.HasValue)
-        {
-            incident.ActualRepairCost = dto.ActualRepairCost.Value;
-        }
+        incident.Status    = dto.Status;
         incident.UpdatedAt = DateTime.UtcNow;
 
-        if (dto.Status is IncidentStatus.Resolved or IncidentStatus.Closed)
+        if (dto.ActualCost.HasValue)
         {
-            if (incident.Vehicle.Status == VehicleStatus.OutOfService)
-            {
-                incident.Vehicle.Status = VehicleStatus.Available;
-                incident.Vehicle.UpdatedAt = DateTime.UtcNow;
-            }
+            incident.ActualCost = dto.ActualCost.Value;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Incident {Number} status changed to {Status}", incident.IncidentNumber, dto.Status);
+        _dashboardCache.Invalidate();
 
         return MapToDto(incident);
     }
 
     private static IncidentDto MapToDto(Incident i) => new()
     {
-        Id = i.Id,
-        VehicleId = i.VehicleId,
+        Id                  = i.Id,
+        IncidentNumber      = i.IncidentNumber,
+        VehicleId           = i.VehicleId,
         VehicleRegistration = i.Vehicle?.RegistrationNumber ?? string.Empty,
-        VehicleMakeModel = i.Vehicle != null ? $"{i.Vehicle.Make} {i.Vehicle.Model}" : string.Empty,
-        DriverId = i.DriverId,
-        DriverName = i.Driver?.FullName,
-        TripId = i.TripId,
-        TripNumber = i.Trip?.TripNumber,
-        Date = i.Date,
-        Location = i.Location,
-        Type = i.Type,
-        Description = i.Description,
-        Severity = i.Severity,
-        PoliceReportNumber = i.PoliceReportNumber,
-        InsuranceClaimNumber = i.InsuranceClaimNumber,
-        EstimatedDamage = i.EstimatedDamage,
-        ActualRepairCost = i.ActualRepairCost,
-        Status = i.Status,
-        CreatedAt = i.CreatedAt,
-        UpdatedAt = i.UpdatedAt
+        DriverId            = i.DriverId,
+        DriverName          = i.Driver?.FullName,
+        TripId              = i.TripId,
+        TripNumber          = i.Trip?.TripNumber,
+        Date                = i.Date,
+        Type                = i.Type,
+        Severity            = i.Severity,
+        Description         = i.Description,
+        Location            = i.Location,
+        EstimatedCost       = i.EstimatedCost,
+        ActualCost          = i.ActualCost,
+        PoliceReportNumber  = i.PoliceReportNumber,
+        Status              = i.Status,
+        CreatedAt           = i.CreatedAt,
+        UpdatedAt           = i.UpdatedAt
     };
 }

@@ -1,9 +1,11 @@
 using FleetManagement.Application.DTOs.Fuel;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize(Roles = "Admin,FleetManager,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class FuelController : ControllerBase
@@ -42,6 +44,7 @@ public class FuelController : ControllerBase
 
     /// <summary>Soft-delete a fuel record.</summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,FleetManager")]
     public async Task<IActionResult> Delete(Guid id)
     {
         await _fuelService.DeleteAsync(id);

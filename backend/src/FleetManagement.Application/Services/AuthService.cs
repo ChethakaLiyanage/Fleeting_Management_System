@@ -24,7 +24,7 @@ public class AuthService : IAuthService
             .FirstOrDefaultAsync(u => u.Email == request.Email && u.PasswordHash == request.Password); // Simplified for now
 
         if (user == null || !user.IsActive)
-            throw new Exception("Invalid credentials");
+            throw new UnauthorizedAccessException("Invalid email or password.");
 
         var roles = user.UserRoles.Select(ur => ur.Role!.Name);
         var accessToken = _tokenService.GenerateAccessToken(user, roles);

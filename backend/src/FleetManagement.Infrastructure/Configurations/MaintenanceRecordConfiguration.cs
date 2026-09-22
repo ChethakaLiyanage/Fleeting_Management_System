@@ -33,5 +33,8 @@ public class MaintenanceRecordConfiguration : IEntityTypeConfiguration<Maintenan
             .WithMany()
             .HasForeignKey(m => m.VehicleId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(m => new { m.VehicleId, m.ScheduledDate });
+        builder.HasIndex(m => new { m.Status, m.ScheduledDate });
     }
 }

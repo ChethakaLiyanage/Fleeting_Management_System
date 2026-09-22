@@ -1,19 +1,28 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Vehicles;
+using FleetManagement.Application.Exceptions;
 using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Entities;
 using FleetManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FleetManagement.Application.Services;
 
 public class VehicleService : IVehicleService
 {
     private readonly IFleetDbContext _context;
+    private readonly IDashboardCache _dashboardCache;
+    private readonly ILogger<VehicleService> _logger;
 
-    public VehicleService(IFleetDbContext context)
+    public VehicleService(
+        IFleetDbContext context,
+        IDashboardCache dashboardCache,
+        ILogger<VehicleService> logger)
     {
-        _context = context;
+        _context        = context;
+        _dashboardCache = dashboardCache;
+        _logger         = logger;
     }
 
     public async Task<PagedResult<VehicleDto>> GetVehiclesAsync(VehicleFilterParams filterParams, CancellationToken cancellationToken = default)
@@ -63,10 +72,31 @@ public class VehicleService : IVehicleService
             _ => filterParams.IsDescending ? query.OrderByDescending(v => v.CreatedAt) : query.OrderBy(v => v.CreatedAt)
         };
 
+        // Project directly to DTO in SQL
         var items = await query
             .Skip((filterParams.PageNumber - 1) * filterParams.PageSize)
             .Take(filterParams.PageSize)
-            .Select(v => MapToDto(v))
+            .Select(v => new VehicleDto
+            {
+                Id                 = v.Id,
+                RegistrationNumber = v.RegistrationNumber,
+                VIN                = v.VIN,
+                EngineNumber       = v.EngineNumber,
+                Make               = v.Make,
+                Model              = v.Model,
+                Year               = v.Year,
+                VehicleType        = v.VehicleType,
+                FuelType           = v.FuelType,
+                Transmission       = v.Transmission,
+                Color              = v.Color,
+                Mileage            = v.Mileage,
+                Status             = v.Status,
+                PurchaseDate       = v.PurchaseDate,
+                PurchasePrice      = v.PurchasePrice,
+                RegistrationExpiry = v.RegistrationExpiry,
+                CreatedAt          = v.CreatedAt,
+                UpdatedAt          = v.UpdatedAt
+            })
             .ToListAsync(cancellationToken);
 
         return new PagedResult<VehicleDto>(items, totalCount, filterParams.PageNumber, filterParams.PageSize);
@@ -76,9 +106,31 @@ public class VehicleService : IVehicleService
     {
         var vehicle = await _context.Vehicles
             .AsNoTracking()
-            .FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken);
+            .Where(v => v.Id == id && !v.IsDeleted)
+            .Select(v => new VehicleDto
+            {
+                Id                 = v.Id,
+                RegistrationNumber = v.RegistrationNumber,
+                VIN                = v.VIN,
+                EngineNumber       = v.EngineNumber,
+                Make               = v.Make,
+                Model              = v.Model,
+                Year               = v.Year,
+                VehicleType        = v.VehicleType,
+                FuelType           = v.FuelType,
+                Transmission       = v.Transmission,
+                Color              = v.Color,
+                Mileage            = v.Mileage,
+                Status             = v.Status,
+                PurchaseDate       = v.PurchaseDate,
+                PurchasePrice      = v.PurchasePrice,
+                RegistrationExpiry = v.RegistrationExpiry,
+                CreatedAt          = v.CreatedAt,
+                UpdatedAt          = v.UpdatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        return vehicle == null ? null : MapToDto(vehicle);
+        return vehicle;
     }
 
     public async Task<VehicleSummaryDto?> GetVehicleSummaryAsync(Guid id, CancellationToken cancellationToken = default)
@@ -95,18 +147,18 @@ public class VehicleService : IVehicleService
 
         return new VehicleSummaryDto
         {
-            Id = vehicle.Id,
-            RegistrationNumber = vehicle.RegistrationNumber,
-            Make = vehicle.Make,
-            Model = vehicle.Model,
-            Status = vehicle.Status,
-            CurrentMileage = vehicle.Mileage,
-            RegistrationExpiry = vehicle.RegistrationExpiry,
+            Id                         = vehicle.Id,
+            RegistrationNumber         = vehicle.RegistrationNumber,
+            Make                       = vehicle.Make,
+            Model                      = vehicle.Model,
+            Status                     = vehicle.Status,
+            CurrentMileage             = vehicle.Mileage,
+            RegistrationExpiry         = vehicle.RegistrationExpiry,
             IsRegistrationExpiringSoon = isExpiringSoon,
-            TotalTrips = 0,
-            TotalAssignments = 0,
-            TotalInspections = 0,
-            TotalIncidents = 0
+            TotalTrips                 = 0,
+            TotalAssignments           = 0,
+            TotalInspections           = 0,
+            TotalIncidents             = 0
         };
     }
 
@@ -117,31 +169,34 @@ public class VehicleService : IVehicleService
 
         if (exists)
         {
-            throw new InvalidOperationException($"Vehicle with registration number '{dto.RegistrationNumber}' already exists.");
+            throw new ConflictException($"Vehicle with registration number '{dto.RegistrationNumber}' already exists.");
         }
 
         var vehicle = new Vehicle
         {
             RegistrationNumber = dto.RegistrationNumber.Trim().ToUpper(),
-            VIN = dto.VIN?.Trim().ToUpper(),
-            EngineNumber = dto.EngineNumber.Trim(),
-            Make = dto.Make.Trim(),
-            Model = dto.Model.Trim(),
-            Year = dto.Year,
-            VehicleType = dto.VehicleType,
-            FuelType = dto.FuelType,
-            Transmission = dto.Transmission,
-            Color = dto.Color.Trim(),
-            Mileage = dto.Mileage,
-            Status = VehicleStatus.Available,
-            PurchaseDate = dto.PurchaseDate,
-            PurchasePrice = dto.PurchasePrice,
+            VIN                = dto.VIN?.Trim().ToUpper(),
+            EngineNumber       = dto.EngineNumber.Trim(),
+            Make               = dto.Make.Trim(),
+            Model              = dto.Model.Trim(),
+            Year               = dto.Year,
+            VehicleType        = dto.VehicleType,
+            FuelType           = dto.FuelType,
+            Transmission       = dto.Transmission,
+            Color              = dto.Color.Trim(),
+            Mileage            = dto.Mileage,
+            Status             = VehicleStatus.Available,
+            PurchaseDate       = dto.PurchaseDate,
+            PurchasePrice      = dto.PurchasePrice,
             RegistrationExpiry = dto.RegistrationExpiry,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt          = DateTime.UtcNow
         };
 
         _context.Vehicles.Add(vehicle);
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Vehicle created: {Id} {Reg}", vehicle.Id, vehicle.RegistrationNumber);
+        _dashboardCache.Invalidate();
 
         return MapToDto(vehicle);
     }
@@ -158,27 +213,30 @@ public class VehicleService : IVehicleService
 
         if (duplicateReg)
         {
-            throw new InvalidOperationException($"Another vehicle with registration number '{dto.RegistrationNumber}' already exists.");
+            throw new ConflictException($"Another vehicle with registration number '{dto.RegistrationNumber}' already exists.");
         }
 
         vehicle.RegistrationNumber = dto.RegistrationNumber.Trim().ToUpper();
-        vehicle.VIN = dto.VIN?.Trim().ToUpper();
-        vehicle.EngineNumber = dto.EngineNumber.Trim();
-        vehicle.Make = dto.Make.Trim();
-        vehicle.Model = dto.Model.Trim();
-        vehicle.Year = dto.Year;
-        vehicle.VehicleType = dto.VehicleType;
-        vehicle.FuelType = dto.FuelType;
-        vehicle.Transmission = dto.Transmission;
-        vehicle.Color = dto.Color.Trim();
-        vehicle.Mileage = dto.Mileage;
-        vehicle.Status = dto.Status;
-        vehicle.PurchaseDate = dto.PurchaseDate;
-        vehicle.PurchasePrice = dto.PurchasePrice;
+        vehicle.VIN                = dto.VIN?.Trim().ToUpper();
+        vehicle.EngineNumber       = dto.EngineNumber.Trim();
+        vehicle.Make               = dto.Make.Trim();
+        vehicle.Model              = dto.Model.Trim();
+        vehicle.Year               = dto.Year;
+        vehicle.VehicleType        = dto.VehicleType;
+        vehicle.FuelType           = dto.FuelType;
+        vehicle.Transmission       = dto.Transmission;
+        vehicle.Color              = dto.Color.Trim();
+        vehicle.Mileage            = dto.Mileage;
+        vehicle.Status             = dto.Status;
+        vehicle.PurchaseDate       = dto.PurchaseDate;
+        vehicle.PurchasePrice      = dto.PurchasePrice;
         vehicle.RegistrationExpiry = dto.RegistrationExpiry;
-        vehicle.UpdatedAt = DateTime.UtcNow;
+        vehicle.UpdatedAt          = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Vehicle updated: {Id} {Reg}", vehicle.Id, vehicle.RegistrationNumber);
+        _dashboardCache.Invalidate();
 
         return MapToDto(vehicle);
     }
@@ -190,33 +248,37 @@ public class VehicleService : IVehicleService
 
         if (vehicle == null) return false;
 
-        vehicle.Status = VehicleStatus.Retired;
+        vehicle.Status    = VehicleStatus.Retired;
         vehicle.IsDeleted = true;
         vehicle.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning("Vehicle archived: {Id}", id);
+        _dashboardCache.Invalidate();
+
         return true;
     }
 
     private static VehicleDto MapToDto(Vehicle vehicle) => new()
     {
-        Id = vehicle.Id,
+        Id                 = vehicle.Id,
         RegistrationNumber = vehicle.RegistrationNumber,
-        VIN = vehicle.VIN,
-        EngineNumber = vehicle.EngineNumber,
-        Make = vehicle.Make,
-        Model = vehicle.Model,
-        Year = vehicle.Year,
-        VehicleType = vehicle.VehicleType,
-        FuelType = vehicle.FuelType,
-        Transmission = vehicle.Transmission,
-        Color = vehicle.Color,
-        Mileage = vehicle.Mileage,
-        Status = vehicle.Status,
-        PurchaseDate = vehicle.PurchaseDate,
-        PurchasePrice = vehicle.PurchasePrice,
+        VIN                = vehicle.VIN,
+        EngineNumber       = vehicle.EngineNumber,
+        Make               = vehicle.Make,
+        Model              = vehicle.Model,
+        Year               = vehicle.Year,
+        VehicleType        = vehicle.VehicleType,
+        FuelType           = vehicle.FuelType,
+        Transmission       = vehicle.Transmission,
+        Color              = vehicle.Color,
+        Mileage            = vehicle.Mileage,
+        Status             = vehicle.Status,
+        PurchaseDate       = vehicle.PurchaseDate,
+        PurchasePrice      = vehicle.PurchasePrice,
         RegistrationExpiry = vehicle.RegistrationExpiry,
-        CreatedAt = vehicle.CreatedAt,
-        UpdatedAt = vehicle.UpdatedAt
+        CreatedAt          = vehicle.CreatedAt,
+        UpdatedAt          = vehicle.UpdatedAt
     };
 }

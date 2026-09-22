@@ -1,4 +1,4 @@
-﻿using FleetManagement.Domain.Entities;
+using FleetManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -55,5 +55,7 @@ public class TripConfiguration : IEntityTypeConfiguration<Trip>
 
         builder.HasIndex(t => t.Status);
         builder.HasIndex(t => t.StartTime);
+        builder.HasIndex(t => new { t.VehicleId, t.StartTime });
+        builder.HasIndex(t => new { t.DriverId, t.StartTime });
     }
 }

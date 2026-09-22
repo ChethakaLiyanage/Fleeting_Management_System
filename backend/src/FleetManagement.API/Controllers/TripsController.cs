@@ -1,10 +1,12 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Trips;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize(Roles = "Admin,FleetManager,Driver")]
 [ApiController]
 [Route("api/[controller]")]
 public class TripsController : ControllerBase
@@ -38,40 +40,28 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateTrip([FromBody] CreateTripDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var trip = await _tripService.CreateTripAsync(dto, cancellationToken);
-            return CreatedAtAction(nameof(GetTripById), new { id = trip.Id }, ApiResponse<TripDto>.Ok(trip, "Trip created successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<TripDto>.Fail(ex.Message));
-        }
+        var trip = await _tripService.CreateTripAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetTripById), new { id = trip.Id }, ApiResponse<TripDto>.Ok(trip, "Trip created successfully."));
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateTrip(Guid id, [FromBody] UpdateTripDto dto, CancellationToken cancellationToken)
     {
-        try
+        var trip = await _tripService.UpdateTripAsync(id, dto, cancellationToken);
+        if (trip == null)
         {
-            var trip = await _tripService.UpdateTripAsync(id, dto, cancellationToken);
-            if (trip == null)
-            {
-                return NotFound(ApiResponse<TripDto>.Fail($"Trip with ID '{id}' was not found."));
-            }
-            return Ok(ApiResponse<TripDto>.Ok(trip, "Trip updated successfully."));
+            return NotFound(ApiResponse<TripDto>.Fail($"Trip with ID '{id}' was not found."));
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<TripDto>.Fail(ex.Message));
-        }
+        return Ok(ApiResponse<TripDto>.Ok(trip, "Trip updated successfully."));
     }
 
     [HttpPost("{id:guid}/start")]
@@ -79,15 +69,8 @@ public class TripsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> StartTrip(Guid id, [FromBody] StartTripDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var trip = await _tripService.StartTripAsync(id, dto, cancellationToken);
-            return Ok(ApiResponse<TripDto>.Ok(trip, "Trip started successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<TripDto>.Fail(ex.Message));
-        }
+        var trip = await _tripService.StartTripAsync(id, dto, cancellationToken);
+        return Ok(ApiResponse<TripDto>.Ok(trip, "Trip started successfully."));
     }
 
     [HttpPost("{id:guid}/complete")]
@@ -95,30 +78,17 @@ public class TripsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CompleteTrip(Guid id, [FromBody] CompleteTripDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var trip = await _tripService.CompleteTripAsync(id, dto, cancellationToken);
-            return Ok(ApiResponse<TripDto>.Ok(trip, "Trip completed successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<TripDto>.Fail(ex.Message));
-        }
+        var trip = await _tripService.CompleteTripAsync(id, dto, cancellationToken);
+        return Ok(ApiResponse<TripDto>.Ok(trip, "Trip completed successfully."));
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<TripDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CancelTrip(Guid id, [FromQuery] string? reason, CancellationToken cancellationToken)
     {
-        try
-        {
-            var trip = await _tripService.CancelTripAsync(id, reason, cancellationToken);
-            return Ok(ApiResponse<TripDto>.Ok(trip, "Trip cancelled successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<TripDto>.Fail(ex.Message));
-        }
+        var trip = await _tripService.CancelTripAsync(id, reason, cancellationToken);
+        return Ok(ApiResponse<TripDto>.Ok(trip, "Trip cancelled successfully."));
     }
 }

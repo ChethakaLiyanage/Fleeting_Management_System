@@ -1,56 +1,124 @@
 using FleetManagement.Application.DTOs.Maintenance;
+using FleetManagement.Application.Exceptions;
 using FleetManagement.Application.Interfaces;
 using FleetManagement.Domain.Entities;
 using FleetManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FleetManagement.Application.Services;
 
 public class MaintenanceService : IMaintenanceService
 {
     private readonly IFleetDbContext _context;
+    private readonly IDashboardCache _dashboardCache;
+    private readonly ILogger<MaintenanceService> _logger;
 
-    public MaintenanceService(IFleetDbContext context) => _context = context;
+    public MaintenanceService(
+        IFleetDbContext context,
+        IDashboardCache dashboardCache,
+        ILogger<MaintenanceService> logger)
+    {
+        _context        = context;
+        _dashboardCache = dashboardCache;
+        _logger         = logger;
+    }
 
     public async Task<IEnumerable<MaintenanceRecordDto>> GetAllAsync()
     {
-        var records = await _context.MaintenanceRecords
-            .Include(m => m.Vehicle)
+        return await _context.MaintenanceRecords
+            .AsNoTracking()
+            .Where(m => !m.IsDeleted)
             .OrderByDescending(m => m.ScheduledDate)
+            .Select(m => new MaintenanceRecordDto
+            {
+                Id                  = m.Id,
+                VehicleId           = m.VehicleId,
+                VehicleRegistration = m.Vehicle != null ? m.Vehicle.RegistrationNumber : string.Empty,
+                Type                = m.Type,
+                Description         = m.Description,
+                ServiceProvider     = m.ServiceProvider,
+                ScheduledDate       = m.ScheduledDate,
+                CompletedDate       = m.CompletedDate,
+                OdometerReading     = m.OdometerReading,
+                Cost                = m.Cost,
+                NextServiceOdometer = m.NextServiceOdometer,
+                NextServiceDate     = m.NextServiceDate,
+                Notes               = m.Notes,
+                Status              = m.Status,
+                IsOverdue           = m.Status == MaintenanceStatus.Scheduled && m.ScheduledDate < DateTime.UtcNow,
+                IsCompleted         = m.Status == MaintenanceStatus.Completed,
+                CreatedAt           = m.CreatedAt
+            })
             .ToListAsync();
-
-        return records.Select(MapToDto);
     }
 
     public async Task<IEnumerable<MaintenanceRecordDto>> GetByVehicleAsync(Guid vehicleId)
     {
-        var records = await _context.MaintenanceRecords
-            .Include(m => m.Vehicle)
-            .Where(m => m.VehicleId == vehicleId)
+        return await _context.MaintenanceRecords
+            .AsNoTracking()
+            .Where(m => m.VehicleId == vehicleId && !m.IsDeleted)
             .OrderByDescending(m => m.ScheduledDate)
+            .Select(m => new MaintenanceRecordDto
+            {
+                Id                  = m.Id,
+                VehicleId           = m.VehicleId,
+                VehicleRegistration = m.Vehicle != null ? m.Vehicle.RegistrationNumber : string.Empty,
+                Type                = m.Type,
+                Description         = m.Description,
+                ServiceProvider     = m.ServiceProvider,
+                ScheduledDate       = m.ScheduledDate,
+                CompletedDate       = m.CompletedDate,
+                OdometerReading     = m.OdometerReading,
+                Cost                = m.Cost,
+                NextServiceOdometer = m.NextServiceOdometer,
+                NextServiceDate     = m.NextServiceDate,
+                Notes               = m.Notes,
+                Status              = m.Status,
+                IsOverdue           = m.Status == MaintenanceStatus.Scheduled && m.ScheduledDate < DateTime.UtcNow,
+                IsCompleted         = m.Status == MaintenanceStatus.Completed,
+                CreatedAt           = m.CreatedAt
+            })
             .ToListAsync();
-
-        return records.Select(MapToDto);
     }
 
     public async Task<IEnumerable<MaintenanceRecordDto>> GetOverdueAsync()
     {
         var now = DateTime.UtcNow;
-        var records = await _context.MaintenanceRecords
-            .Include(m => m.Vehicle)
-            .Where(m => m.Status == MaintenanceStatus.Scheduled && m.ScheduledDate < now)
+        return await _context.MaintenanceRecords
+            .AsNoTracking()
+            .Where(m => m.Status == MaintenanceStatus.Scheduled && m.ScheduledDate < now && !m.IsDeleted)
             .OrderBy(m => m.ScheduledDate)
+            .Select(m => new MaintenanceRecordDto
+            {
+                Id                  = m.Id,
+                VehicleId           = m.VehicleId,
+                VehicleRegistration = m.Vehicle != null ? m.Vehicle.RegistrationNumber : string.Empty,
+                Type                = m.Type,
+                Description         = m.Description,
+                ServiceProvider     = m.ServiceProvider,
+                ScheduledDate       = m.ScheduledDate,
+                CompletedDate       = m.CompletedDate,
+                OdometerReading     = m.OdometerReading,
+                Cost                = m.Cost,
+                NextServiceOdometer = m.NextServiceOdometer,
+                NextServiceDate     = m.NextServiceDate,
+                Notes               = m.Notes,
+                Status              = m.Status,
+                IsOverdue           = true,
+                IsCompleted         = false,
+                CreatedAt           = m.CreatedAt
+            })
             .ToListAsync();
-
-        return records.Select(MapToDto);
     }
 
     public async Task<MaintenanceRecordDto> GetByIdAsync(Guid id)
     {
         var record = await _context.MaintenanceRecords
             .Include(m => m.Vehicle)
-            .FirstOrDefaultAsync(m => m.Id == id)
-            ?? throw new Exception($"Maintenance record {id} not found.");
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted)
+            ?? throw new NotFoundException(nameof(MaintenanceRecord), id);
 
         return MapToDto(record);
     }
@@ -59,32 +127,36 @@ public class MaintenanceService : IMaintenanceService
     {
         var record = new MaintenanceRecord
         {
-            VehicleId            = request.VehicleId,
-            Type                 = request.Type,
-            Description          = request.Description,
-            ServiceProvider      = request.ServiceProvider,
-            ScheduledDate        = request.ScheduledDate,
-            OdometerReading      = request.OdometerReading,
-            Cost                 = request.Cost,
-            NextServiceOdometer  = request.NextServiceOdometer,
-            NextServiceDate      = request.NextServiceDate,
-            Notes                = request.Notes,
-            Status               = MaintenanceStatus.Scheduled
+            VehicleId           = request.VehicleId,
+            Type                = request.Type,
+            Description         = request.Description,
+            ServiceProvider     = request.ServiceProvider,
+            ScheduledDate       = request.ScheduledDate,
+            OdometerReading     = request.OdometerReading,
+            Cost                = request.Cost,
+            NextServiceOdometer = request.NextServiceOdometer,
+            NextServiceDate     = request.NextServiceDate,
+            Notes               = request.Notes,
+            Status              = MaintenanceStatus.Scheduled,
+            CreatedAt           = DateTime.UtcNow
         };
 
         _context.MaintenanceRecords.Add(record);
         await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Maintenance record created: {Id} for vehicle {VehicleId}", record.Id, request.VehicleId);
+        _dashboardCache.Invalidate();
 
         return await GetByIdAsync(record.Id);
     }
 
     public async Task<MaintenanceRecordDto> UpdateStatusAsync(Guid id, UpdateMaintenanceStatusRequest request)
     {
-        var record = await _context.MaintenanceRecords.FindAsync(id)
-            ?? throw new Exception($"Maintenance record {id} not found.");
+        var record = await _context.MaintenanceRecords.FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted)
+            ?? throw new NotFoundException(nameof(MaintenanceRecord), id);
 
-        record.Status        = request.Status;
-        record.UpdatedAt     = DateTime.UtcNow;
+        record.Status    = request.Status;
+        record.UpdatedAt = DateTime.UtcNow;
 
         if (request.Status == MaintenanceStatus.Completed)
         {
@@ -98,25 +170,31 @@ public class MaintenanceService : IMaintenanceService
 
         await _context.SaveChangesAsync();
 
-        return await GetByIdAsync(id);
+        _logger.LogInformation("Maintenance status updated: {Id} -> {Status}", id, request.Status);
+        _dashboardCache.Invalidate();
+
+        return await GetByIdAsync(record.Id);
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        var record = await _context.MaintenanceRecords.FindAsync(id)
-            ?? throw new Exception($"Maintenance record {id} not found.");
+        var record = await _context.MaintenanceRecords.FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted)
+            ?? throw new NotFoundException(nameof(MaintenanceRecord), id);
 
         record.IsDeleted = true;
+        record.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        _logger.LogWarning("Maintenance record deleted: {Id}", id);
+        _dashboardCache.Invalidate();
     }
 
     private static MaintenanceRecordDto MapToDto(MaintenanceRecord m) => new()
     {
         Id                  = m.Id,
         VehicleId           = m.VehicleId,
-        VehicleRegistration = m.Vehicle?.RegistrationNumber,
-        Type                = m.Type.ToString(),
-        Status              = m.Status.ToString(),
+        VehicleRegistration = m.Vehicle?.RegistrationNumber ?? string.Empty,
+        Type                = m.Type,
         Description         = m.Description,
         ServiceProvider     = m.ServiceProvider,
         ScheduledDate       = m.ScheduledDate,
@@ -126,6 +204,9 @@ public class MaintenanceService : IMaintenanceService
         NextServiceOdometer = m.NextServiceOdometer,
         NextServiceDate     = m.NextServiceDate,
         Notes               = m.Notes,
-        IsOverdue           = m.IsOverdue
+        Status              = m.Status,
+        IsOverdue           = m.IsOverdue,
+        IsCompleted         = m.IsCompleted,
+        CreatedAt           = m.CreatedAt
     };
 }

@@ -1,10 +1,12 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Assignments;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize(Roles = "Admin,FleetManager")]
 [ApiController]
 [Route("api/[controller]")]
 public class AssignmentsController : ControllerBase
@@ -37,15 +39,8 @@ public class AssignmentsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AssignVehicle([FromBody] CreateAssignmentDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var assignment = await _assignmentService.AssignVehicleAsync(dto, cancellationToken);
-            return StatusCode(StatusCodes.Status201Created, ApiResponse<AssignmentDto>.Ok(assignment, "Vehicle assigned successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<AssignmentDto>.Fail(ex.Message));
-        }
+        var assignment = await _assignmentService.AssignVehicleAsync(dto, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, ApiResponse<AssignmentDto>.Ok(assignment, "Vehicle assigned successfully."));
     }
 
     [HttpPost("{id:guid}/end")]
@@ -54,18 +49,11 @@ public class AssignmentsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> EndAssignment(Guid id, [FromBody] EndAssignmentDto dto, CancellationToken cancellationToken)
     {
-        try
+        var assignment = await _assignmentService.EndAssignmentAsync(id, dto, cancellationToken);
+        if (assignment == null)
         {
-            var assignment = await _assignmentService.EndAssignmentAsync(id, dto, cancellationToken);
-            if (assignment == null)
-            {
-                return NotFound(ApiResponse<AssignmentDto>.Fail($"Assignment with ID '{id}' was not found."));
-            }
-            return Ok(ApiResponse<AssignmentDto>.Ok(assignment, "Assignment ended successfully."));
+            return NotFound(ApiResponse<AssignmentDto>.Fail($"Assignment with ID '{id}' was not found."));
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<AssignmentDto>.Fail(ex.Message));
-        }
+        return Ok(ApiResponse<AssignmentDto>.Ok(assignment, "Assignment ended successfully."));
     }
 }

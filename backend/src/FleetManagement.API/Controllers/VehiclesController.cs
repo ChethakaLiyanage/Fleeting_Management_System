@@ -1,10 +1,12 @@
-﻿using FleetManagement.Application.Common;
+using FleetManagement.Application.Common;
 using FleetManagement.Application.DTOs.Vehicles;
 using FleetManagement.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FleetManagement.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class VehiclesController : ControllerBase
@@ -51,43 +53,34 @@ public class VehiclesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<VehicleDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateVehicle([FromBody] CreateVehicleDto dto, CancellationToken cancellationToken)
     {
-        try
-        {
-            var vehicle = await _vehicleService.CreateVehicleAsync(dto, cancellationToken);
-            return CreatedAtAction(nameof(GetVehicleById), new { id = vehicle.Id }, ApiResponse<VehicleDto>.Ok(vehicle, "Vehicle created successfully."));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<VehicleDto>.Fail(ex.Message));
-        }
+        var vehicle = await _vehicleService.CreateVehicleAsync(dto, cancellationToken);
+        return CreatedAtAction(nameof(GetVehicleById), new { id = vehicle.Id }, ApiResponse<VehicleDto>.Ok(vehicle, "Vehicle created successfully."));
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<VehicleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateVehicle(Guid id, [FromBody] UpdateVehicleDto dto, CancellationToken cancellationToken)
     {
-        try
+        var vehicle = await _vehicleService.UpdateVehicleAsync(id, dto, cancellationToken);
+        if (vehicle == null)
         {
-            var vehicle = await _vehicleService.UpdateVehicleAsync(id, dto, cancellationToken);
-            if (vehicle == null)
-            {
-                return NotFound(ApiResponse<VehicleDto>.Fail($"Vehicle with ID '{id}' was not found."));
-            }
-            return Ok(ApiResponse<VehicleDto>.Ok(vehicle, "Vehicle updated successfully."));
+            return NotFound(ApiResponse<VehicleDto>.Fail($"Vehicle with ID '{id}' was not found."));
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ApiResponse<VehicleDto>.Fail(ex.Message));
-        }
+        return Ok(ApiResponse<VehicleDto>.Ok(vehicle, "Vehicle updated successfully."));
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,FleetManager")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ArchiveVehicle(Guid id, CancellationToken cancellationToken)

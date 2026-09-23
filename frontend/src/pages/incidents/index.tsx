@@ -5,6 +5,39 @@ import { IncidentDto, PagedResult } from '../../types';
 import { Plus, Pencil, Trash2, AlertTriangle, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
+const getIncidentTypeLabel = (type: number | string): string => {
+  switch (Number(type)) {
+    case 1: return 'Accident';
+    case 2: return 'Breakdown';
+    case 3: return 'Damage';
+    case 4: return 'Theft';
+    case 5: return 'Traffic violation';
+    case 6: return 'Other';
+    default: return String(type);
+  }
+};
+
+const getIncidentSeverityLabel = (severity: number | string): string => {
+  switch (Number(severity)) {
+    case 1: return 'Low';
+    case 2: return 'Medium';
+    case 3: return 'High';
+    case 4: return 'Critical';
+    default: return String(severity);
+  }
+};
+
+const getIncidentStatusLabel = (status: number | string): string => {
+  switch (Number(status)) {
+    case 1: return 'Reported';
+    case 2: return 'Under investigation';
+    case 3: return 'Repair pending';
+    case 4: return 'Resolved';
+    case 5: return 'Closed';
+    default: return String(status);
+  }
+};
+
 const Incidents = () => {
   const [data, setData] = useState<PagedResult<IncidentDto> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,9 +68,9 @@ const Incidents = () => {
     !q ||
     i.vehicleRegistration?.toLowerCase().includes(q) ||
     i.description?.toLowerCase().includes(q) ||
-    String(i.type)?.toLowerCase().includes(q) ||
-    String(i.severity)?.toLowerCase().includes(q) ||
-    String(i.status)?.toLowerCase().includes(q)
+    getIncidentTypeLabel(i.type as any).toLowerCase().includes(q) ||
+    getIncidentSeverityLabel(i.severity).toLowerCase().includes(q) ||
+    getIncidentStatusLabel(i.status).toLowerCase().includes(q)
   );
 
   return (
@@ -104,10 +137,10 @@ const Incidents = () => {
                         </div>
                       </td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{new Date(incident.date).toLocaleDateString()}</td>
-                      <td style={{ fontSize: '0.8125rem' }}>{incident.type}</td>
+                      <td style={{ fontSize: '0.8125rem' }}>{getIncidentTypeLabel(incident.type as any)}</td>
                       <td style={{ fontSize: '0.8125rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident.description}</td>
-                      <td><span className={getStatusBadge(String(incident.severity))}>{incident.severity}</span></td>
-                      <td><span className={getStatusBadge(String(incident.status))}>{incident.status}</span></td>
+                      <td><span className={getStatusBadge(getIncidentSeverityLabel(incident.severity))}>{getIncidentSeverityLabel(incident.severity)}</span></td>
+                      <td><span className={getStatusBadge(getIncidentStatusLabel(incident.status))}>{getIncidentStatusLabel(incident.status)}</span></td>
                       <td>
                         <div className="action-btns">
                           <button className="btn-icon" title="Edit" onClick={() => navigate(`/incidents/${incident.id}/edit`)}><Pencil size={13} /></button>

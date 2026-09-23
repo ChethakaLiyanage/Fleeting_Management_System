@@ -5,6 +5,31 @@ import { VehicleDto, PagedResult } from '../../types';
 import { Plus, Pencil, Trash2, Car, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
+const getVehicleStatusLabel = (status: number | string): string => {
+  switch (Number(status)) {
+    case 1: return 'Available';
+    case 2: return 'Assigned';
+    case 3: return 'On Trip';
+    case 4: return 'Maintenance';
+    case 5: return 'Out of Service';
+    case 6: return 'Retired';
+    default: return String(status);
+  }
+};
+
+const getVehicleTypeLabel = (type: number | string): string => {
+  switch (Number(type)) {
+    case 1: return 'Sedan';
+    case 2: return 'SUV';
+    case 3: return 'Truck';
+    case 4: return 'Van';
+    case 5: return 'Bus';
+    case 6: return 'Motorcycle';
+    case 7: return 'Other';
+    default: return String(type);
+  }
+};
+
 const Vehicles = () => {
   const [data, setData] = useState<PagedResult<VehicleDto> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,8 +61,8 @@ const Vehicles = () => {
     v.registrationNumber?.toLowerCase().includes(q) ||
     v.make?.toLowerCase().includes(q) ||
     v.model?.toLowerCase().includes(q) ||
-    String(v.vehicleType)?.toLowerCase().includes(q) ||
-    String(v.status)?.toLowerCase().includes(q)
+    getVehicleTypeLabel(v.vehicleType).toLowerCase().includes(q) ||
+    getVehicleStatusLabel(v.status).toLowerCase().includes(q)
   );
 
   return (
@@ -105,8 +130,8 @@ const Vehicles = () => {
                       </td>
                       <td>{vehicle.make} {vehicle.model}</td>
                       <td>{vehicle.year}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{vehicle.vehicleType}</td>
-                      <td><span className={getStatusBadge(String(vehicle.status))}>{vehicle.status}</span></td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{getVehicleTypeLabel(vehicle.vehicleType)}</td>
+                      <td><span className={getStatusBadge(getVehicleStatusLabel(vehicle.status))}>{getVehicleStatusLabel(vehicle.status)}</span></td>
                       <td>{vehicle.mileage.toLocaleString()} km</td>
                       <td>
                         <div className="action-btns">

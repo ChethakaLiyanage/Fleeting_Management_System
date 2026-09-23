@@ -5,6 +5,18 @@ import { DriverDto, PagedResult } from '../../types';
 import { Plus, Pencil, Trash2, Users, AlertCircle, Search } from 'lucide-react';
 import { getStatusBadge } from '../../utils/badgeUtils';
 
+const getDriverStatusLabel = (status: number | string): string => {
+  switch (Number(status)) {
+    case 1: return 'Available';
+    case 2: return 'Assigned';
+    case 3: return 'On Trip';
+    case 4: return 'Leave';
+    case 5: return 'Suspended';
+    case 6: return 'Inactive';
+    default: return String(status);
+  }
+};
+
 const Drivers = () => {
   const [data, setData] = useState<PagedResult<DriverDto> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +49,7 @@ const Drivers = () => {
     d.email?.toLowerCase().includes(q) ||
     d.employeeNumber?.toLowerCase().includes(q) ||
     d.licenseNumber?.toLowerCase().includes(q) ||
-    String(d.status)?.toLowerCase().includes(q)
+    getDriverStatusLabel(d.status).toLowerCase().includes(q)
   );
 
   return (
@@ -114,8 +126,8 @@ const Drivers = () => {
                           : <span style={{ fontSize: '0.8125rem' }}>{driver.licenseExpiry ? new Date(driver.licenseExpiry).toLocaleDateString() : '—'}</span>
                         }
                       </td>
-                      <td><span className={getStatusBadge(String(driver.status))}>{driver.status}</span></td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{driver.phone}</td>
+                      <td><span className={getStatusBadge(getDriverStatusLabel(driver.status))}>{getDriverStatusLabel(driver.status)}</span></td>
+                      <td style={{ fontSize: '0.8125rem' }}>{driver.phone}</td>
                       <td>
                         <div className="action-btns">
                           <button className="btn-icon" title="Edit" onClick={() => navigate(`/drivers/${driver.id}/edit`)}><Pencil size={13} /></button>

@@ -169,7 +169,8 @@ public class TripService : ITripService
             throw new InvalidOperationException("Cannot schedule or assign trip: vehicle or driver is already on an active In-Progress trip.");
         }
 
-        var tripNumber = $"TRP-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
+        var tripCount = await _context.Trips.IgnoreQueryFilters().CountAsync(cancellationToken);
+        var tripNumber = $"TRP-{(tripCount + 1):D4}";
 
         var trip = new Trip
         {

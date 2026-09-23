@@ -7,20 +7,20 @@ import { getStatusBadge } from '../../utils/badgeUtils';
 
 const getTypeLabel = (type: number | string): string => {
   switch (Number(type)) {
-    case 1: return 'Preventive';
-    case 2: return 'Corrective';
-    case 3: return 'Predictive';
-    case 4: return 'Routine';
+    case 0: return 'Preventive';
+    case 1: return 'Corrective';
+    case 2: return 'Predictive';
+    case 3: return 'Routine';
     default: return String(type);
   }
 };
 
 const getStatusLabel = (status: number | string): string => {
   switch (Number(status)) {
-    case 1: return 'Scheduled';
-    case 2: return 'InProgress';
-    case 3: return 'Completed';
-    case 4: return 'Cancelled';
+    case 0: return 'Scheduled';
+    case 1: return 'InProgress';
+    case 2: return 'Completed';
+    case 3: return 'Cancelled';
     default: return String(status);
   }
 };

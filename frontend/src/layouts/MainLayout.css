@@ -384,6 +384,9 @@
   letter-spacing: 0.05em;
   color: var(--text-muted);
   margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-value {

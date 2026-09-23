@@ -185,9 +185,9 @@ public class VehicleService : IVehicleService
             Color              = dto.Color.Trim(),
             Mileage            = dto.Mileage,
             Status             = VehicleStatus.Available,
-            PurchaseDate       = dto.PurchaseDate,
+            PurchaseDate       = dto.PurchaseDate.HasValue ? DateTime.SpecifyKind(dto.PurchaseDate.Value, DateTimeKind.Utc) : null,
             PurchasePrice      = dto.PurchasePrice,
-            RegistrationExpiry = dto.RegistrationExpiry,
+            RegistrationExpiry = dto.RegistrationExpiry.HasValue ? DateTime.SpecifyKind(dto.RegistrationExpiry.Value, DateTimeKind.Utc) : null,
             CreatedAt          = DateTime.UtcNow
         };
 
@@ -227,9 +227,9 @@ public class VehicleService : IVehicleService
         vehicle.Color              = dto.Color.Trim();
         vehicle.Mileage            = dto.Mileage;
         vehicle.Status             = dto.Status;
-        vehicle.PurchaseDate       = dto.PurchaseDate;
+        vehicle.PurchaseDate       = dto.PurchaseDate.HasValue ? DateTime.SpecifyKind(dto.PurchaseDate.Value, DateTimeKind.Utc) : null;
         vehicle.PurchasePrice      = dto.PurchasePrice;
-        vehicle.RegistrationExpiry = dto.RegistrationExpiry;
+        vehicle.RegistrationExpiry = dto.RegistrationExpiry.HasValue ? DateTime.SpecifyKind(dto.RegistrationExpiry.Value, DateTimeKind.Utc) : null;
         vehicle.UpdatedAt          = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
